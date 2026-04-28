@@ -168,6 +168,22 @@ else
   ok "vnet-lab — created (10.10.0.0/16)"
 fi
 
+if az network vnet subnet show \
+     --resource-group "$RG_NET" \
+     --vnet-name vnet-lab \
+     --name snet-gateway \
+     --output none 2>/dev/null; then
+  ok "snet-gateway — already exists"
+else
+  az network vnet subnet create \
+    --resource-group "$RG_NET" \
+    --vnet-name vnet-lab \
+    --name snet-gateway \
+    --address-prefix 10.10.0.0/24 \
+    --output none
+  ok "snet-gateway — created (10.10.0.0/24)"
+fi
+
 # ── Monitoring ────────────────────────────────────────────────────────────────
 header "Monitoring"
 
@@ -189,7 +205,7 @@ else
 fi
 
 # ── Done ──────────────────────────────────────────────────────────────────────
-header "Rebuild complete"
+header "Build complete"
 
 echo ""
 echo "  Infrastructure baseline:"
@@ -197,9 +213,4 @@ echo "    RGs:      rg-lab-networking, rg-lab-monitoring  (both eastus)"
 echo "    Policies: Allowed SKUs | Require tag | Deny public IPs (except rg-lab-networking) | Allowed locations"
 echo "    VNet:     vnet-lab 10.10.0.0/16  (rg-lab-networking)"
 echo "    Monitor:  ag-lab-alerts → $ADMIN_EMAIL"
-echo ""
-echo "  RGs created on demand (not yet provisioned):"
-echo "    rg-lab-workloads  — workload VMs, NICs, disks"
-echo "    rg-lab-security   — Key Vault, managed identities"
-echo "    rg-lab-storage    — Storage accounts"
 echo ""

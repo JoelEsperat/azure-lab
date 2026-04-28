@@ -1,7 +1,6 @@
-#!/usr/bin/env bash
-# destroy-tailscale-vm.sh — Tears down the Tailscale subnet router VM and its resources.
-# Leaves vnet-lab and rg-lab-networking intact.
-#
+#!/bin/bash
+# destroy-tailscale-vm.sh — Delete the Tailscale subnet router VM and its resources (IPv4, disks, NSG, etc),
+# and remove the device from the Tailscale tailnet.
 # Usage:
 #   chmod +x tailscale-vm/destroy-tailscale-vm.sh && ./tailscale-vm/destroy-tailscale-vm.sh
 
@@ -19,13 +18,12 @@ NSG_NAME="nsg-tailscale"
 VNET="vnet-lab"
 SUBNET="snet-gateway"
 TS_API_KEY="${TS_API_KEY:-}"
-TAILNET="${TAILNET:--}"
 
 echo "→ Removing device from Tailscale tailnet..."
 if [[ -n "$TS_API_KEY" ]]; then
   DEVICE_IDS=$(curl -sf \
     -H "Authorization: Bearer ${TS_API_KEY}" \
-    "https://api.tailscale.com/api/v2/tailnet/${TAILNET}/devices" \
+    "https://api.tailscale.com/api/v2/tailnet/-/devices" \
     | jq -r '.devices[] | select(.hostname == "azure-subnet-router") | .id' 2>/dev/null || true)
   if [[ -n "$DEVICE_IDS" ]]; then
     while IFS= read -r id; do
@@ -64,10 +62,6 @@ az network public-ip delete --resource-group "$RG" --name "$PIP_NAME" --output n
 echo "→ Deleting NSG..."
 az network nsg delete --resource-group "$RG" --name "$NSG_NAME" --output none 2>/dev/null \
   && echo "  ✓ $NSG_NAME" || echo "  – $NSG_NAME (not found)"
-
-echo "→ Deleting subnet..."
-az network vnet subnet delete --resource-group "$RG" --vnet-name "$VNET" --name "$SUBNET" --output none 2>/dev/null \
-  && echo "  ✓ $SUBNET" || echo "  – $SUBNET (not found)"
 
 echo ""
 echo "✅ Tailscale VM destroyed. vnet-lab and rg-lab-networking are intact."

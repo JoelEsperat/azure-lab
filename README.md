@@ -1,6 +1,6 @@
 # Azure Lab
 
-This document describes the architecture of my Azure lab. The goal is to build a minimal Azure landing zone, using corporate best pratices, for a low budget, to support a few Azure workloads. 
+This document describes the architecture of my Azure lab. The goal is to build a minimal Azure landing zone, using best pratices, for a low budget, to support a few Azure workloads. 
 
 ---
 
@@ -10,7 +10,7 @@ This document describes the architecture of my Azure lab. The goal is to build a
 - **Single subscription** and **single region** (East US)
 - **Governance** — policies enforce allowed SKU, location, and tagging
 - **Private connectivity** - the Azure VNet is an extension of my home network - no internet exposure
-- **Hybrid connectivity through Tailscale** — the Azure VNet is connected to my tailscale - the only component with internet connectivity is the Tailscale subnet router VM - to keep the cost low the subnet router VM and the public IPv4 are provisioned only when needed
+- **Zero-trust hybrid connectivity** — the Azure VNet is connected to my Tailscale tailnet, providing zero trust networking - the only component with internet connectivity is the Tailscale subnet router VM - to keep the cost low the subnet router VM and the public IPv4 are provisioned only when needed
 - **Infrastructure as code**
 
 ---
@@ -45,13 +45,13 @@ vnet-lab  10.10.0.0/16   (rg-lab-networking, eastus)
 └── snet-workloads  10.10.2.0/24   workloads
 ```
 
-The Tailscale subnet router is the only ingress path into the VNet. It is much cheaper than a VPN Gateway and sufficient for my homelab. 
+The Tailscale subnet router is the only ingress path into the VNet. It is much cheaper than a VPN Gateway and sufficient for my homelab, and it provides zero trust networking. 
 
 ---
 
 ## Hybrid Connectivity (Tailscale)
 
-Connectivity with my home network is provided through Tailscale using a lightweight Ubuntu VM that joins the tailnet and advertises the entire Azure subnet `10.10.0.0/16` to connected devices.
+Connectivity with my home network and devices is provided through Tailscale using a lightweight Ubuntu VM that joins the tailnet and advertises the entire Azure subnet `10.10.0.0/16`
 
 ```
 Home devices ──── Tailscale tailnet ──── vm-tailscale (Azure, snet-gateway)
@@ -69,11 +69,11 @@ Home devices ──── Tailscale tailnet ──── vm-tailscale (Azure, sn
 | Image | Ubuntu 24.04 |
 | Subnet | `snet-gateway` (10.10.0.0/24) |
 | Public IP | Standard Static (required for internet connectivity) |
-| NSG | SSH from deployer IP only; no other inbound rules |
+| NSG | Empty (no inbound rules) |
 | IP forwarding | Enabled via cloud-init (`net.ipv4.ip_forward=1`) |
 | Tailscale | Enabled via cloud-init - advertises `10.10.0.0/16` on my tailnet |
 
-Deployed and destroyed via `tailscale-vm/deploy.sh` / `destroy.sh`.
+Deployed and destroyed via `tailscale-vm/create-tailscale-vm.sh` / `tailscale-vm/destroy-tailscale-vm.sh`.
 
 ---
 
@@ -117,7 +117,5 @@ No Defender for Cloud plans enabled — default free tier only.
 3. workloads
 ```
 
-To keep the costs down, the Tailscale VM is created on-demand:
+To keep the costs down, the Tailscale VM is created on-demand: `tailscale-vm/create-tailscale-vm.sh` / `tailscale-vm/destroy-tailscale-vm.sh`.
 
-1. `tailscale-vm/create-tailscale-vm.sh`
-2. `tailscale-vm/destroy-tailscale-vm.sh`

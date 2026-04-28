@@ -19,16 +19,7 @@ VM_IMAGE="Ubuntu2404"
 ADMIN_USER="azureuser"
 TS_AUTHKEY="${TS_AUTHKEY:?TS_AUTHKEY env var required}"
 TS_API_KEY="${TS_API_KEY:?TS_API_KEY env var required}"
-TAILNET="${TAILNET:--}"
 # ──────────────────────────────────────────────────────────
-
-echo "→ Creating subnet snet-gateway..."
-az network vnet subnet create \
-  --resource-group "$RG" \
-  --vnet-name "$VNET" \
-  --name "$SUBNET" \
-  --address-prefix 10.10.0.0/24 \
-  --output none
 
 echo "→ Generating cloud-init..."
 CLOUD_INIT=$(mktemp)
@@ -44,22 +35,10 @@ az network public-ip create \
   --allocation-method Static \
   --output none
 
-echo "→ Creating NSG (SSH only from your IP)..."
-MY_IP=$(curl -s https://api.ipify.org)
+echo "→ Creating NSG (no inbound rules)..."
 az network nsg create \
   --resource-group "$RG" \
   --name "$NSG_NAME" \
-  --output none
-
-az network nsg rule create \
-  --resource-group "$RG" \
-  --nsg-name "$NSG_NAME" \
-  --name "AllowSSH" \
-  --priority 100 \
-  --protocol Tcp \
-  --destination-port-ranges 22 \
-  --source-address-prefixes "$MY_IP" \
-  --access Allow \
   --output none
 
 echo "→ Creating NIC..."
@@ -106,7 +85,7 @@ DEVICE_ID=""
 for i in $(seq 1 20); do
   DEVICE_ID=$(curl -sf \
     -H "Authorization: Bearer ${TS_API_KEY}" \
-    "https://api.tailscale.com/api/v2/tailnet/${TAILNET}/devices" \
+    "https://api.tailscale.com/api/v2/tailnet/-/devices" \
     | jq -r '([.devices[] | select(.hostname == "azure-subnet-router")] | sort_by(.lastSeen) | last | .id) // empty' 2>/dev/null || true)
   if [[ -n "$DEVICE_ID" ]]; then
     echo "  ✓ Device found: $DEVICE_ID"

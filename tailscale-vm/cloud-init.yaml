@@ -1,6 +1,6 @@
 #cloud-config
 package_update: true
-package_upgrade: false
+package_upgrade: true
 
 packages:
   - curl
@@ -15,4 +15,6 @@ runcmd:
       --authkey=${TS_AUTHKEY}
       --advertise-routes=10.10.0.0/16
       --accept-dns=false
+      --accept-routes=true
       --hostname=azure-subnet-router
+      --ssh
