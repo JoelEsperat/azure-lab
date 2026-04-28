@@ -17,6 +17,7 @@ NSG_NAME="nsg-tailscale"
 VM_SIZE="Standard_B1s"
 VM_IMAGE="Ubuntu2404"
 ADMIN_USER="azureuser"
+ADMIN_SSH_PUBKEY="${ADMIN_SSH_PUBKEY:?ADMIN_SSH_PUBKEY env var required}"
 TS_AUTHKEY="${TS_AUTHKEY:?TS_AUTHKEY env var required}"
 TS_API_KEY="${TS_API_KEY:?TS_API_KEY env var required}"
 # ──────────────────────────────────────────────────────────
@@ -35,10 +36,23 @@ az network public-ip create \
   --allocation-method Static \
   --output none
 
-echo "→ Creating NSG (no inbound rules)..."
+echo "→ Creating NSG..."
 az network nsg create \
   --resource-group "$RG" \
   --name "$NSG_NAME" \
+  --output none
+
+az network nsg rule create \
+  --resource-group "$RG" \
+  --nsg-name "$NSG_NAME" \
+  --name "AllowSSH-VNet" \
+  --priority 100 \
+  --direction Inbound \
+  --access Allow \
+  --protocol Tcp \
+  --source-address-prefixes VirtualNetwork \
+  --destination-address-prefixes "10.10.0.10" \
+  --destination-port-ranges 22 \
   --output none
 
 echo "→ Creating NIC..."
@@ -60,7 +74,7 @@ az vm create \
   --image "$VM_IMAGE" \
   --size "$VM_SIZE" \
   --admin-username "$ADMIN_USER" \
-  --generate-ssh-keys \
+  --ssh-key-values "$ADMIN_SSH_PUBKEY" \
   --custom-data "@$CLOUD_INIT" \
   --storage-sku Standard_LRS \
   --os-disk-delete-option Delete \
@@ -76,7 +90,6 @@ PUBLIC_IP=$(az network public-ip show \
 echo ""
 echo "✅ VM deployed"
 echo "   Public IP : $PUBLIC_IP"
-echo "   SSH       : ssh ${ADMIN_USER}@${PUBLIC_IP}"
 echo ""
 
 echo "→ Waiting for azure-subnet-router to join tailnet (first check in 30s)..."

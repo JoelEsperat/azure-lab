@@ -220,6 +220,7 @@ AZURE_LOCATION=eastus
 
 ADMIN_EMAIL=
 ADMIN_OBJECT_ID=$ADMIN_OBJECT_ID
+ADMIN_SSH_PUBKEY=
 
 AUTOMATION_SP_NAME=$SP_NAME
 AUTOMATION_OBJECT_ID=$AUTOMATION_OBJECT_ID
@@ -237,6 +238,7 @@ else
   upsert_env "AUTOMATION_CLIENT_ID"   "${SP_CLIENT_ID:-}"
   init_env   "AZURE_LOCATION"         "eastus"
   init_env   "ADMIN_EMAIL"            ""
+  init_env   "ADMIN_SSH_PUBKEY"       ""
   # Only write the secret when we just created a new SP; never overwrite an existing one
   if [[ -n "${SP_CLIENT_SECRET:-}" ]]; then
     init_env "AUTOMATION_CLIENT_SECRET" "$SP_CLIENT_SECRET"
