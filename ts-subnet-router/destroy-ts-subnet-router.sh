@@ -1,8 +1,8 @@
 #!/bin/bash
-# destroy-tailscale-vm.sh — Delete the Tailscale subnet router VM and its resources (IPv4, disks, NSG, etc),
+# destroy-ts-subnet-router.sh — Delete the Tailscale subnet router VM and its resources (IPv4, disks, NSG, etc),
 # and remove the device from the Tailscale tailnet.
 # Usage:
-#   chmod +x tailscale-vm/destroy-tailscale-vm.sh && ./tailscale-vm/destroy-tailscale-vm.sh
+#   chmod +x ts-subnet-router/destroy-ts-subnet-router.sh && ./ts-subnet-router/destroy-ts-subnet-router.sh
 
 set -euo pipefail
 
@@ -10,8 +10,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${SCRIPT_DIR}/../.env"
 [[ -f "$ENV_FILE" ]] && source "$ENV_FILE"
 
-RG="rg-lab-networking"
-VM_NAME="vm-tailscale"
+RG="rg-lab-network"
+VM_NAME="vm-ts-subnet-router"
 NIC_NAME="nic-tailscale"
 PIP_NAME="pip-tailscale"
 NSG_NAME="nsg-tailscale"
@@ -64,4 +64,4 @@ az network nsg delete --resource-group "$RG" --name "$NSG_NAME" --output none 2>
   && echo "  ✓ $NSG_NAME" || echo "  – $NSG_NAME (not found)"
 
 echo ""
-echo "✅ Tailscale VM destroyed. vnet-lab and rg-lab-networking are intact."
+echo "✅ Tailscale VM destroyed. vnet-lab and rg-lab-network are intact."

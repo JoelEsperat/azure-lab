@@ -27,10 +27,9 @@ Subscription: azure-lab
 │   └── Policy: Deny public IPs  → enforce
 │
 ├── rg-lab-monitoring   ← Action groups, alert rules, budgets
-├── rg-lab-networking   ← VNet, NSGs, subnets, Tailscale subnet router
+├── rg-lab-network   ← VNet, NSGs, subnets, Tailscale subnet router
 ├── rg-lab-security     ← Key Vault, managed identities
-├── rg-lab-storage      ← Storage accounts, file shares, databases
-└── rg-lab-workloads    ← Workloads
+└── rg-lab-workloads    ← Workloads (compute and storage)
 ```
 
 ---
@@ -38,7 +37,7 @@ Subscription: azure-lab
 ## Network Topology
 
 ```
-vnet-lab  10.10.0.0/16   (rg-lab-networking, eastus)
+vnet-lab  10.10.0.0/16   (rg-lab-network, eastus)
 │
 ├── snet-gateway    10.10.0.0/24   hybrid connectivity (Tailscale VM)
 └── snet-pes        10.10.1.0/24   private endpoints
@@ -54,7 +53,7 @@ The Tailscale subnet router is the only ingress path into the VNet. It is much c
 Connectivity with my home network and devices is provided through Tailscale using a lightweight Ubuntu VM that joins the tailnet and advertises the entire Azure subnet `10.10.0.0/16`
 
 ```
-Home devices ──── Tailscale tailnet ──── vm-tailscale (Azure, snet-gateway)
+Home devices ──── Tailscale tailnet ──── vm-ts-subnet-router (Azure, snet-gateway)
                                                │
                                          vnet-lab 10.10.0.0/16
                                                │
@@ -63,8 +62,8 @@ Home devices ──── Tailscale tailnet ──── vm-tailscale (Azure, sn
 
 | Property | Value |
 |---|---|
-| VM name | `vm-tailscale` |
-| Resource group | `rg-lab-networking` |
+| VM name | `vm-ts-subnet-router` |
+| Resource group | `rg-lab-network` |
 | Size | `Standard_B1s` |
 | Image | Ubuntu 24.04 |
 | Subnet | `snet-gateway` (10.10.0.0/24) |
@@ -73,7 +72,7 @@ Home devices ──── Tailscale tailnet ──── vm-tailscale (Azure, sn
 | IP forwarding | Enabled via cloud-init (`net.ipv4.ip_forward=1`) |
 | Tailscale | Enabled via cloud-init - advertises `10.10.0.0/16` on my tailnet |
 
-Deployed and destroyed via `tailscale-vm/create-tailscale-vm.sh` / `tailscale-vm/destroy-tailscale-vm.sh`.
+Deployed and destroyed via `ts-subnet-router/create-ts-subnet-router.sh` / `ts-subnet-router/destroy-ts-subnet-router.sh`.
 
 ---
 
@@ -114,8 +113,7 @@ No Defender for Cloud plans enabled — default free tier only.
 ```
 1. bootstrap.sh (one-time: prerequisites, service principal, resource providers)
 2. build-lab.sh (baseline: RGs, policies, VNet, action group) - idempotent
-3. workloads
 ```
 
-To keep the costs down, the Tailscale VM is created on-demand: `tailscale-vm/create-tailscale-vm.sh` / `tailscale-vm/destroy-tailscale-vm.sh`.
+To keep the costs down, the Tailscale VM is created on-demand: `ts-subnet-router/create-ts-subnet-router.sh` / `ts-subnet-router/destroy-ts-subnet-router.sh`.
 

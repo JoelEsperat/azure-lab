@@ -6,9 +6,9 @@ ENV_FILE="${SCRIPT_DIR}/../.env"
 [[ -f "$ENV_FILE" ]] && source "$ENV_FILE"
 
 # ─── Config ───────────────────────────────────────────────
-RG="rg-lab-networking"
-LOCATION="eastus"
-VM_NAME="vm-tailscale"
+RG="rg-lab-network"
+LOCATION="${AZURE_LOCATION:-eastus}"
+VM_NAME="vm-ts-subnet-router"
 VNET="vnet-lab"
 SUBNET="snet-gateway"
 NIC_NAME="nic-tailscale"

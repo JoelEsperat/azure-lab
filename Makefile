@@ -23,8 +23,8 @@ help: ## Show this help message
 	@echo ""
 	@echo "Infrastructure deployment:"
 	@echo "  make build               Build the lab infrastructure baseline"
-	@echo "  make deploy-tailscale    Deploy the Tailscale VM"
-	@echo "  make destroy-tailscale   Destroy the Tailscale VM"
+	@echo "  make deploy-ts-subnet-router   Deploy the Tailscale subnet router VM"
+	@echo "  make destroy-ts-subnet-router  Destroy the Tailscale subnet router VM"
 	@echo ""
 	@echo "Environment:"
 	@echo "  make env                 Show current environment configuration"
@@ -42,17 +42,17 @@ build: ## Build the lab infrastructure baseline
 	@chmod +x scripts/build-lab.sh
 	@./scripts/build-lab.sh
 
-.PHONY: deploy-tailscale
-deploy-tailscale: ## Deploy the Tailscale VM
-	@echo -e "$(BLUE)Deploying Tailscale VM...$(NC)"
-	@chmod +x tailscale-vm/create-tailscale-vm.sh
-	@./tailscale-vm/create-tailscale-vm.sh
+.PHONY: deploy-ts-subnet-router
+deploy-ts-subnet-router: ## Deploy the Tailscale subnet router VM
+	@echo -e "$(BLUE)Deploying Tailscale subnet router VM...$(NC)"
+	@chmod +x ts-subnet-router/create-ts-subnet-router.sh
+	@./ts-subnet-router/create-ts-subnet-router.sh
 
-.PHONY: destroy-tailscale
-destroy-tailscale: ## Destroy the Tailscale VM
-	@echo -e "$(YELLOW)Destroying Tailscale VM...$(NC)"
-	@chmod +x tailscale-vm/destroy-tailscale-vm.sh
-	@./tailscale-vm/destroy-tailscale-vm.sh
+.PHONY: destroy-ts-subnet-router
+destroy-ts-subnet-router: ## Destroy the Tailscale subnet router VM
+	@echo -e "$(YELLOW)Destroying Tailscale subnet router VM...$(NC)"
+	@chmod +x ts-subnet-router/destroy-ts-subnet-router.sh
+	@./ts-subnet-router/destroy-ts-subnet-router.sh
 
 .PHONY: validate
 validate: ## Validate environment and prerequisites
