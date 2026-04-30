@@ -46,6 +46,10 @@ RG_SEC="rg-lab-security"
 KV_SUFFIX="$(echo "$SUBSCRIPTION_ID" | tr -d '-' | cut -c1-6)"
 KV_NAME="kv-lab-${KV_SUFFIX}"
 
+# Home IP for Key Vault network ACL — set HOME_IP in .env to skip auto-detection
+HOME_IP="${HOME_IP:-$(curl -sf https://api.ipify.org || fail "Could not detect public IP — set HOME_IP in .env")}"
+info "Home IP: ${HOME_IP}"
+
 # Built-in Key Vault RBAC role IDs
 ROLE_SECRETS_OFFICER="b86a8fe4-44ce-4948-aee5-eccb2c155cd7"
 ROLE_SECRETS_USER="4633458b-17de-408a-b874-0445c86b69e6"
@@ -257,9 +261,41 @@ else
     --sku Standard \
     --enable-rbac-authorization true \
     --retention-days 7 \
+    --default-action Deny \
+    --bypass AzureServices \
+    --ip-rules "${HOME_IP}" \
     --tags env=lab \
     --output none
-  ok "$KV_NAME — created (RBAC-enabled, 7-day soft-delete)"
+  ok "$KV_NAME — created (RBAC-enabled, 7-day soft-delete, network-restricted)"
+fi
+
+# Idempotently enforce network ACL — runs on both new and pre-existing vaults
+current_acl=$(az keyvault show --name "$KV_NAME" --resource-group "$RG_SEC" \
+  --query "properties.networkAcls.defaultAction" -o tsv 2>/dev/null)
+if [[ "$current_acl" != "Deny" ]]; then
+  az keyvault update \
+    --name "$KV_NAME" \
+    --resource-group "$RG_SEC" \
+    --default-action Deny \
+    --bypass AzureServices \
+    --output none
+  ok "$KV_NAME — network ACL set to Deny + AzureServices bypass"
+else
+  ok "$KV_NAME — network ACL already Deny"
+fi
+
+# Idempotently ensure home IP is in the allowlist
+current_rules=$(az keyvault network-rule list --name "$KV_NAME" --resource-group "$RG_SEC" \
+  --query "ipRules[].value" -o tsv 2>/dev/null)
+if echo "$current_rules" | grep -qF "${HOME_IP}"; then
+  ok "$KV_NAME — home IP ${HOME_IP} already in allowlist"
+else
+  az keyvault network-rule add \
+    --name "$KV_NAME" \
+    --resource-group "$RG_SEC" \
+    --ip-address "${HOME_IP}" \
+    --output none
+  ok "$KV_NAME — home IP ${HOME_IP} added to allowlist"
 fi
 
 rbac_assigned() {
