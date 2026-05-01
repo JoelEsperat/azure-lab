@@ -11,6 +11,15 @@ YELLOW := \033[1;33m
 RED := \033[0;31m
 NC := \033[0m
 
+LOCATION := eastus
+RG_NETWORK := rg-lab-network
+RG_MONITORING := rg-lab-monitoring
+RG_SECURITY := rg-lab-security
+
+# Pull ADMIN_EMAIL, ADMIN_OBJECT_ID, AUTOMATION_OBJECT_ID, HOME_IP from .env if present
+-include .env
+export
+
 .PHONY: help
 help: ## Show this help message
 	@echo "Azure Lab - Available commands"
@@ -22,8 +31,19 @@ help: ## Show this help message
 	@echo "  make bootstrap           Run bootstrap script (prerequisites, SP, providers)"
 	@echo ""
 	@echo "Infrastructure deployment:"
-	@echo "  make build               Build the lab infrastructure baseline"
+	@echo "  make build               Full baseline (all Bicep layers in order)"
+	@echo "  make deploy-subscription Deploy bicep/subscription.bicep (RGs)"
+	@echo "  make deploy-network      Deploy bicep/network.bicep (VNet + subnets)"
+	@echo "  make deploy-monitoring   Deploy bicep/monitoring.bicep (action group)"
+	@echo "  make deploy-policy       Deploy bicep/policy.bicep (defs + assignments)"
+	@echo "  make deploy-security     Deploy bicep/security.bicep (KV + RBAC + ACL)"
+	@echo "  make whatif-subscription Preview subscription.bicep changes"
+	@echo "  make whatif-network      Preview network.bicep changes"
+	@echo "  make whatif-monitoring   Preview monitoring.bicep changes"
+	@echo "  make whatif-policy       Preview policy.bicep changes"
+	@echo "  make whatif-security     Preview security.bicep changes"
 	@echo "  make deploy-ts-subnet-router   Deploy the Tailscale subnet router VM"
+	@echo "  make whatif-ts-subnet-router   Preview subnet-router.bicep changes"
 	@echo "  make destroy-ts-subnet-router  Destroy the Tailscale subnet router VM"
 	@echo ""
 	@echo "Environment:"
@@ -36,20 +56,119 @@ bootstrap: ## Run bootstrap script (one-time setup)
 	@chmod +x scripts/bootstrap.sh
 	@./scripts/bootstrap.sh
 
+.PHONY: deploy-subscription
+deploy-subscription: ## Deploy subscription-scope Bicep (resource groups)
+	@echo -e "$(BLUE)Deploying bicep/subscription.bicep...$(NC)"
+	@az deployment sub create \
+		--location $(LOCATION) \
+		--name subscription-baseline \
+		--template-file bicep/subscription.bicep \
+		--output none
+	@echo -e "  $(GREEN)✓$(NC) subscription baseline deployed"
+
+.PHONY: deploy-network
+deploy-network: ## Deploy network Bicep (VNet + subnets)
+	@echo -e "$(BLUE)Deploying bicep/network.bicep...$(NC)"
+	@az deployment group create \
+		--resource-group $(RG_NETWORK) \
+		--name network-baseline \
+		--template-file bicep/network.bicep \
+		--output none
+	@echo -e "  $(GREEN)✓$(NC) network baseline deployed"
+
+.PHONY: whatif-subscription
+whatif-subscription: ## Preview subscription.bicep changes
+	@az deployment sub what-if \
+		--location $(LOCATION) \
+		--template-file bicep/subscription.bicep
+
+.PHONY: whatif-network
+whatif-network: ## Preview network.bicep changes
+	@az deployment group what-if \
+		--resource-group $(RG_NETWORK) \
+		--template-file bicep/network.bicep
+
+.PHONY: deploy-monitoring
+deploy-monitoring: ## Deploy monitoring Bicep (action group)
+	@echo -e "$(BLUE)Deploying bicep/monitoring.bicep...$(NC)"
+	@if [ -z "$$ADMIN_EMAIL" ]; then echo -e "  $(RED)✗$(NC) ADMIN_EMAIL not set (run 'make bootstrap' or set in .env)" && exit 1; fi
+	@az deployment group create \
+		--resource-group $(RG_MONITORING) \
+		--name monitoring-baseline \
+		--template-file bicep/monitoring.bicep \
+		--parameters adminEmail=$$ADMIN_EMAIL \
+		--output none
+	@echo -e "  $(GREEN)✓$(NC) monitoring baseline deployed"
+
+.PHONY: whatif-monitoring
+whatif-monitoring: ## Preview monitoring.bicep changes
+	@if [ -z "$$ADMIN_EMAIL" ]; then echo -e "  $(RED)✗$(NC) ADMIN_EMAIL not set" && exit 1; fi
+	@az deployment group what-if \
+		--resource-group $(RG_MONITORING) \
+		--template-file bicep/monitoring.bicep \
+		--parameters adminEmail=$$ADMIN_EMAIL
+
+.PHONY: deploy-policy
+deploy-policy: ## Deploy policy Bicep (definitions + assignments)
+	@echo -e "$(BLUE)Deploying bicep/policy.bicep...$(NC)"
+	@az deployment sub create \
+		--location $(LOCATION) \
+		--name policy-baseline \
+		--template-file bicep/policy.bicep \
+		--output none
+	@echo -e "  $(GREEN)✓$(NC) policy baseline deployed"
+
+.PHONY: whatif-policy
+whatif-policy: ## Preview policy.bicep changes
+	@az deployment sub what-if \
+		--location $(LOCATION) \
+		--template-file bicep/policy.bicep
+
+.PHONY: deploy-security
+deploy-security: ## Deploy security Bicep (Key Vault + RBAC + network ACL)
+	@echo -e "$(BLUE)Deploying bicep/security.bicep...$(NC)"
+	@if [ -z "$$ADMIN_OBJECT_ID" ]; then echo -e "  $(RED)✗$(NC) ADMIN_OBJECT_ID not set (run 'make bootstrap' or set in .env)" && exit 1; fi
+	@if [ -z "$$AUTOMATION_OBJECT_ID" ]; then echo -e "  $(RED)✗$(NC) AUTOMATION_OBJECT_ID not set" && exit 1; fi
+	@HOME_IP=$${HOME_IP:-$$(curl -sf https://api.ipify.org)}; \
+	if [ -z "$$HOME_IP" ]; then echo -e "  $(RED)✗$(NC) Could not detect public IP — set HOME_IP in .env" && exit 1; fi; \
+	echo -e "  $(BLUE)▶$(NC) Home IP: $$HOME_IP"; \
+	az deployment group create \
+		--resource-group $(RG_SECURITY) \
+		--name security-baseline \
+		--template-file bicep/security.bicep \
+		--parameters homeIp=$$HOME_IP adminObjectId=$$ADMIN_OBJECT_ID automationObjectId=$$AUTOMATION_OBJECT_ID \
+		--output none
+	@echo -e "  $(GREEN)✓$(NC) security baseline deployed"
+
+.PHONY: whatif-security
+whatif-security: ## Preview security.bicep changes
+	@if [ -z "$$ADMIN_OBJECT_ID" ] || [ -z "$$AUTOMATION_OBJECT_ID" ]; then echo -e "  $(RED)✗$(NC) ADMIN_OBJECT_ID or AUTOMATION_OBJECT_ID not set" && exit 1; fi
+	@HOME_IP=$${HOME_IP:-$$(curl -sf https://api.ipify.org)}; \
+	az deployment group what-if \
+		--resource-group $(RG_SECURITY) \
+		--template-file bicep/security.bicep \
+		--parameters homeIp=$$HOME_IP adminObjectId=$$ADMIN_OBJECT_ID automationObjectId=$$AUTOMATION_OBJECT_ID
+
 .PHONY: build
-build: ## Build the lab infrastructure baseline
-	@echo -e "$(BLUE)Building lab infrastructure...$(NC)"
-	@chmod +x scripts/build-lab.sh
-	@./scripts/build-lab.sh
+build: deploy-subscription deploy-policy deploy-network deploy-monitoring deploy-security ## Full baseline (all Bicep layers)
+	@echo -e "$(GREEN)✓$(NC) Lab baseline deployed"
 
 .PHONY: deploy-ts-subnet-router
-deploy-ts-subnet-router: ## Deploy the Tailscale subnet router VM
+deploy-ts-subnet-router: ## Deploy the Tailscale subnet router VM (Bicep + tailnet route approval)
 	@echo -e "$(BLUE)Deploying Tailscale subnet router VM...$(NC)"
 	@chmod +x ts-subnet-router/create-ts-subnet-router.sh
 	@./ts-subnet-router/create-ts-subnet-router.sh
 
+.PHONY: whatif-ts-subnet-router
+whatif-ts-subnet-router: ## Preview subnet-router.bicep changes
+	@if [ -z "$$ADMIN_SSH_PUBKEY" ]; then echo -e "  $(RED)✗$(NC) ADMIN_SSH_PUBKEY not set" && exit 1; fi
+	@az deployment group what-if \
+		--resource-group $(RG_NETWORK) \
+		--template-file bicep/subnet-router.bicep \
+		--parameters adminSshPubkey="$$ADMIN_SSH_PUBKEY" tsAuthKey="dummy-for-whatif"
+
 .PHONY: destroy-ts-subnet-router
-destroy-ts-subnet-router: ## Destroy the Tailscale subnet router VM
+destroy-ts-subnet-router: ## Destroy the Tailscale subnet router VM (and clean up tailnet device)
 	@echo -e "$(YELLOW)Destroying Tailscale subnet router VM...$(NC)"
 	@chmod +x ts-subnet-router/destroy-ts-subnet-router.sh
 	@./ts-subnet-router/destroy-ts-subnet-router.sh

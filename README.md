@@ -50,7 +50,7 @@ The Tailscale subnet router is the only ingress path into the VNet. It is much c
 
 ## Hybrid Connectivity (Tailscale)
 
-Connectivity with my home network and devices is provided through Tailscale using a lightweight Ubuntu VM that joins the tailnet and advertises the entire Azure subnet `10.10.0.0/16`
+Connectivity with my home network and devices is provided through Tailscale using a lightweight Ubuntu VM that joins the tailnet and advertises the entire Azure subnet `10.10.0.0/16`.
 
 ```
 Home devices ──── Tailscale tailnet ──── vm-ts-subnet-router (Azure, snet-gateway)
@@ -72,7 +72,7 @@ Home devices ──── Tailscale tailnet ──── vm-ts-subnet-router (Az
 | IP forwarding | Enabled via cloud-init (`net.ipv4.ip_forward=1`) |
 | Tailscale | Enabled via cloud-init - advertises `10.10.0.0/16` on my tailnet |
 
-Deployed and destroyed via `ts-subnet-router/create-ts-subnet-router.sh` / `ts-subnet-router/destroy-ts-subnet-router.sh`.
+Deployed via `bicep/subnet-router.bicep`, wrapped by `ts-subnet-router/create-ts-subnet-router.sh` (which also approves the subnet route via the Tailscale API). Destroyed via `ts-subnet-router/destroy-ts-subnet-router.sh` (imperative cleanup + tailnet device removal).
 
 ---
 
@@ -108,12 +108,61 @@ No Defender for Cloud plans enabled — default free tier only.
 
 ---
 
-## Scripts
+## Infrastructure as Code
+
+Bicep is the source of truth for all ARM resources. Bash is reserved for what Bicep can't manage (Entra ID service principal, CLI prerequisites).
+
+### Layout
 
 ```
-1. bootstrap.sh (one-time: prerequisites, service principal, resource providers)
-2. build-lab.sh (baseline: RGs, policies, VNet, action group) - idempotent
+bicep/
+├── subscription.bicep   ← sub scope: resource groups
+├── policy.bicep         ← sub scope: custom defs + assignments
+├── network.bicep        ← rg-lab-network: vnet-lab + snet-gateway
+├── monitoring.bicep     ← rg-lab-monitoring: action group
+├── security.bicep       ← rg-lab-security: Key Vault + RBAC + network ACL
+└── subnet-router.bicep  ← rg-lab-network: Tailscale VM + NIC + NSG + PIP (on-demand)
+
+scripts/
+└── bootstrap.sh         ← one-time: prerequisites, service principal, providers
+
+ts-subnet-router/
+├── cloud-init.yaml                  ← VM bootstrap (loaded by subnet-router.bicep)
+├── create-ts-subnet-router.sh       ← wraps Bicep deploy + tailnet route approval
+└── destroy-ts-subnet-router.sh      ← imperative cleanup + tailnet device removal
 ```
 
-To keep the costs down, the Tailscale VM is created on-demand: `ts-subnet-router/create-ts-subnet-router.sh` / `ts-subnet-router/destroy-ts-subnet-router.sh`.
+### Deployment order
+
+```bash
+# One-time
+make bootstrap
+
+# Recurring (idempotent)
+make build                  # all Bicep layers in order
+
+# Or run pieces individually
+make deploy-subscription    # bicep/subscription.bicep — resource groups
+make deploy-policy          # bicep/policy.bicep — definitions + assignments
+make deploy-network         # bicep/network.bicep — VNet + subnets
+make deploy-monitoring      # bicep/monitoring.bicep — action group
+make deploy-security        # bicep/security.bicep — Key Vault + RBAC + ACL
+
+# Preview before applying (one per layer)
+make whatif-subscription
+make whatif-policy
+make whatif-network
+make whatif-monitoring
+make whatif-security
+```
+
+### On-demand resources
+
+To keep costs down, the Tailscale VM is created on-demand:
+
+```bash
+make deploy-ts-subnet-router    # bicep/subnet-router.bicep + tailnet route approval
+make whatif-ts-subnet-router    # preview before applying
+make destroy-ts-subnet-router   # tear down VM + tailnet device
+```
 

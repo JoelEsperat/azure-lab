@@ -1,96 +1,29 @@
 #!/bin/bash
+# create-ts-subnet-router.sh — Deploy the Tailscale subnet router VM via Bicep,
+# then approve subnet routes via the Tailscale API.
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${SCRIPT_DIR}/../.env"
 [[ -f "$ENV_FILE" ]] && source "$ENV_FILE"
 
-# ─── Config ───────────────────────────────────────────────
 RG="rg-lab-network"
-LOCATION="${AZURE_LOCATION:-eastus}"
-VM_NAME="vm-ts-subnet-router"
-VNET="vnet-lab"
-SUBNET="snet-gateway"
-NIC_NAME="nic-tailscale"
-PIP_NAME="pip-tailscale"
-NSG_NAME="nsg-tailscale"
-VM_SIZE="Standard_B1s"
-VM_IMAGE="Ubuntu2404"
-ADMIN_USER="azureuser"
+TEMPLATE="${SCRIPT_DIR}/../bicep/subnet-router.bicep"
 ADMIN_SSH_PUBKEY="${ADMIN_SSH_PUBKEY:?ADMIN_SSH_PUBKEY env var required}"
 TS_AUTHKEY="${TS_AUTHKEY:?TS_AUTHKEY env var required}"
 TS_API_KEY="${TS_API_KEY:?TS_API_KEY env var required}"
-# ──────────────────────────────────────────────────────────
 
-echo "→ Generating cloud-init..."
-CLOUD_INIT=$(mktemp)
-sed \
-  -e "s|\${TS_AUTHKEY}|${TS_AUTHKEY}|g" \
-  "${SCRIPT_DIR}/cloud-init.yaml" > "$CLOUD_INIT"
-
-echo "→ Creating public IP..."
-az network public-ip create \
+echo "→ Deploying subnet router via bicep/subnet-router.bicep..."
+az deployment group create \
   --resource-group "$RG" \
-  --name "$PIP_NAME" \
-  --sku Standard \
-  --allocation-method Static \
+  --name subnet-router-deploy \
+  --template-file "$TEMPLATE" \
+  --parameters adminSshPubkey="$ADMIN_SSH_PUBKEY" tsAuthKey="$TS_AUTHKEY" \
   --output none
 
-echo "→ Creating NSG..."
-az network nsg create \
-  --resource-group "$RG" \
-  --name "$NSG_NAME" \
-  --output none
-
-az network nsg rule create \
-  --resource-group "$RG" \
-  --nsg-name "$NSG_NAME" \
-  --name "AllowSSH-VNet" \
-  --priority 100 \
-  --direction Inbound \
-  --access Allow \
-  --protocol Tcp \
-  --source-address-prefixes VirtualNetwork \
-  --destination-address-prefixes "10.10.0.10" \
-  --destination-port-ranges 22 \
-  --output none
-
-echo "→ Creating NIC..."
-az network nic create \
-  --resource-group "$RG" \
-  --name "$NIC_NAME" \
-  --vnet-name "$VNET" \
-  --subnet "$SUBNET" \
-  --private-ip-address 10.10.0.10 \
-  --public-ip-address "$PIP_NAME" \
-  --network-security-group "$NSG_NAME" \
-  --output none
-
-echo "→ Creating VM..."
-az vm create \
-  --resource-group "$RG" \
-  --name "$VM_NAME" \
-  --nics "$NIC_NAME" \
-  --image "$VM_IMAGE" \
-  --size "$VM_SIZE" \
-  --admin-username "$ADMIN_USER" \
-  --ssh-key-values "$ADMIN_SSH_PUBKEY" \
-  --custom-data "@$CLOUD_INIT" \
-  --storage-sku Standard_LRS \
-  --os-disk-delete-option Delete \
-  --output none
-
-rm "$CLOUD_INIT"
-
-PUBLIC_IP=$(az network public-ip show \
-  --resource-group "$RG" \
-  --name "$PIP_NAME" \
-  --query ipAddress -o tsv)
-
-echo ""
-echo "✅ VM deployed"
-echo "   Public IP : $PUBLIC_IP"
-echo ""
+PUBLIC_IP=$(az network public-ip show --resource-group "$RG" --name pip-tailscale --query ipAddress -o tsv)
+echo "  ✓ VM deployed (Public IP: $PUBLIC_IP)"
 
 echo "→ Waiting for azure-subnet-router to join tailnet (first check in 30s)..."
 sleep 30
