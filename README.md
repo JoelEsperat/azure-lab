@@ -1,6 +1,6 @@
 # Azure Lab
 
-This document describes the architecture of my Azure lab. The goal is to build a minimal Azure landing zone, using best pratices, for a low budget, to support a few Azure workloads. 
+This document describes the architecture of my Azure lab. The goal is to build a minimal Azure landing zone, using best pratices, for a low budget, to support a few lab workloads. 
 
 ---
 
@@ -10,7 +10,7 @@ This document describes the architecture of my Azure lab. The goal is to build a
 - **Single subscription** and **single region** (Central US)
 - **Governance** — policies enforce allowed SKU, location, and tagging
 - **Private connectivity** - the Azure VNet is an extension of my home network - no internet exposure
-- **Zero-trust hybrid connectivity** — the Azure VNet is connected to my Tailscale tailnet, providing zero trust networking - the only component with internet connectivity is the Tailscale subnet router VM - to keep the cost low the subnet router VM and the public IPv4 are provisioned only when needed
+- **Zero-trust hybrid connectivity** — the Azure VNet is connected to my Tailscale tailnet - the only component with internet connectivity is a Tailscale VM acting as a subnet router to my tailnet - to keep the cost low the VM and the public IPv4 are provisioned only when needed
 - **Infrastructure as code**
 
 ---
@@ -29,7 +29,7 @@ Subscription: azure-lab
 ├── rg-lab-monitoring   ← Action groups, alert rules, budgets
 ├── rg-lab-network   ← VNet, NSGs, subnets, Tailscale subnet router
 ├── rg-lab-security     ← Key Vault, managed identities
-└── rg-lab-workloads    ← Workloads (compute and storage)
+└── rg-lab-workloads    ← Workloads (compute, storage, AI)
 ```
 
 ---
@@ -72,7 +72,7 @@ Home devices ──── Tailscale tailnet ──── vm-tailscale (Azure, sn
 | IP forwarding | Enabled via cloud-init (`net.ipv4.ip_forward=1`) |
 | Tailscale | Enabled via cloud-init - advertises `10.0.0.0/16` on my tailnet |
 
-Deployed via `bicep/tailscale.bicep`, wrapped by `tailscale/create-tailscale.sh` (which also approves the subnet route via the Tailscale API). Destroyed via `tailscale/destroy-tailscale.sh` (imperative cleanup + tailnet device removal).
+Deployed via `bicep/tailscale.bicep`, wrapped by `tailscale/create-tailscale.sh` (which also approves the subnet route via the Tailscale API). Destroyed via `tailscale/destroy-tailscale.sh`.
 
 ---
 
@@ -110,7 +110,7 @@ No Defender for Cloud plans enabled — default free tier only.
 
 ## Infrastructure as Code
 
-Bicep is the source of truth for all ARM resources. Bash is reserved for what Bicep can't manage (Entra ID service principal, CLI prerequisites).
+Bicep is the source of truth for all ARM resources. Bash (or Powershell) is reserved for what Bicep can't manage (Entra ID service principal, CLI prerequisites).
 
 ### Layout
 
@@ -127,9 +127,9 @@ scripts/
 └── bootstrap.sh         ← one-time: prerequisites, service principal, providers
 
 tailscale/
-├── cloud-init.yaml          ← VM bootstrap (loaded by tailscale.bicep)
-├── create-tailscale.sh      ← wraps Bicep deploy + tailnet route approval
-└── destroy-tailscale.sh     ← imperative cleanup + tailnet device removal
+├── cloud-init.yaml          ← VM configuration (loaded by tailscale.bicep)
+├── create-tailscale.sh      ← runs the Bicep deployment and approves the tailnet route
+└── destroy-tailscale.sh     ← destroy the VM and its dependencies
 ```
 
 ### Deployment order
@@ -138,10 +138,10 @@ tailscale/
 # One-time
 make bootstrap
 
-# Recurring (idempotent)
+# Deploy the landing zone (idempotent)
 make build                  # all Bicep layers in order
 
-# Or run pieces individually
+# Or deploy individual layers (idempotent)
 make deploy-subscription    # bicep/subscription.bicep — resource groups
 make deploy-policy          # bicep/policy.bicep — definitions + assignments
 make deploy-network         # bicep/network.bicep — VNet + subnets
@@ -158,11 +158,10 @@ make whatif-security
 
 ### On-demand resources
 
-To keep costs down, the Tailscale VM is created on-demand:
+To keep costs down, the Tailscale VM (and the public IP) is created on-demand:
 
 ```bash
 make deploy-tailscale    # bicep/tailscale.bicep + tailnet route approval
-make whatif-tailscale    # preview before applying
-make destroy-tailscale   # tear down VM + tailnet device
+make whatif-tailscale    # dry run
+make destroy-tailscale   # destroy VM and remove from tailnet
 ```
-

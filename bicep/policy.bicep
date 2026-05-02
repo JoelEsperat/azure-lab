@@ -1,8 +1,5 @@
 targetScope = 'subscription'
 
-@description('Azure region for assignments that require a location (e.g. system-assigned identity).')
-param location string = 'centralus'
-
 @description('Allowed VM SKUs (built-in policy parameter).')
 param allowedVmSkus array = [
   'Standard_B1s'
@@ -58,10 +55,6 @@ resource polAllowedVmSkus 'Microsoft.Authorization/policyAssignments@2024-04-01'
 
 resource polRequireEnvTag 'Microsoft.Authorization/policyAssignments@2024-04-01' = {
   name: 'pol-require-env-tag'
-  location: location
-  identity: {
-    type: 'SystemAssigned'
-  }
   properties: {
     displayName: 'Require a tag and its value on resources'
     policyDefinitionId: requireTagDefId
