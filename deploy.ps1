@@ -43,8 +43,15 @@ function Get-HomeIp {
 }
 
 function Invoke-Az([string[]]$Args) {
-    az @Args
-    if ($LASTEXITCODE -ne 0) { throw "az $($Args[0]) failed (exit $LASTEXITCODE)" }
+    if ($Args -contains 'what-if') {
+        az @Args
+    } else {
+        $output = az @Args 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            $output | ForEach-Object { Write-Host "$_" }
+            throw "az $($Args[0]) failed (exit $LASTEXITCODE)"
+        }
+    }
 }
 
 # ── Targets ──────────────────────────────────────────────────────────────────
@@ -61,13 +68,15 @@ Infrastructure deployment:
   build                      Full baseline (all Bicep layers in order)
   deploy-subscription        Deploy bicep/subscription.bicep (RGs)
   deploy-network             Deploy bicep/network.bicep (VNet + subnets)
-  deploy-monitoring          Deploy bicep/monitoring.bicep (action group)
+  deploy-monitoring          Deploy bicep/monitoring.bicep (workspace + action group)
   deploy-policy              Deploy bicep/policy.bicep (defs + assignments)
+  deploy-activitylog         Deploy bicep/activitylog.bicep (subscription Activity Log → workspace)
   deploy-security            Deploy bicep/security.bicep (KV + RBAC + ACL)
   whatif-subscription        Preview subscription.bicep changes
   whatif-network             Preview network.bicep changes
   whatif-monitoring          Preview monitoring.bicep changes
   whatif-policy              Preview policy.bicep changes
+  whatif-activitylog         Preview activitylog.bicep changes
   whatif-security            Preview security.bicep changes
   deploy-tailscale           Deploy the Tailscale subnet router VM
   whatif-tailscale           Preview tailscale.bicep changes
@@ -167,6 +176,22 @@ function Invoke-WhatIfPolicy {
         "--template-file", "bicep/policy.bicep"
 }
 
+function Invoke-DeployActivityLog {
+    Write-Host "Deploying bicep/activitylog.bicep..."
+    Invoke-Az "deployment", "sub", "create",
+        "--location", $LOCATION,
+        "--name", "activitylog-baseline",
+        "--template-file", "bicep/activitylog.bicep",
+        "--output", "none"
+    Write-Host "  activity log diagnostics deployed"
+}
+
+function Invoke-WhatIfActivityLog {
+    Invoke-Az "deployment", "sub", "what-if",
+        "--location", $LOCATION,
+        "--template-file", "bicep/activitylog.bicep"
+}
+
 function Invoke-WhatIfSecurity {
     Assert-EnvVar "ADMIN_OBJECT_ID", "AUTOMATION_OBJECT_ID"
     $homeIp = Get-HomeIp
@@ -181,6 +206,7 @@ function Invoke-Build {
     Invoke-DeployPolicy
     Invoke-DeployNetwork
     Invoke-DeployMonitoring
+    Invoke-DeployActivityLog
     Invoke-DeploySecurity
     Write-Host "Lab baseline deployed"
 }
@@ -270,6 +296,8 @@ switch ($Target) {
     "whatif-network"           { Invoke-WhatIfNetwork }
     "whatif-monitoring"        { Invoke-WhatIfMonitoring }
     "whatif-policy"            { Invoke-WhatIfPolicy }
+    "deploy-activitylog"       { Invoke-DeployActivityLog }
+    "whatif-activitylog"       { Invoke-WhatIfActivityLog }
     "whatif-security"          { Invoke-WhatIfSecurity }
     "deploy-tailscale"         { Invoke-DeployTailscale }
     "whatif-tailscale"         { Invoke-WhatIfTailscale }

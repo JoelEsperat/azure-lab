@@ -29,6 +29,9 @@ if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
 $azVersion = az version --query '"azure-cli"' -o tsv
 Write-Ok "Azure CLI: $azVersion"
 
+az config set core.show_welcome_message=false 2>$null | Out-Null
+Write-Ok "az CLI welcome banner disabled"
+
 # ── Step 2 — Azure login and subscription ────────────────────────────────────
 Write-Header "Step 2 — Azure login and subscription"
 

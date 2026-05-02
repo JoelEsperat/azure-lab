@@ -34,13 +34,15 @@ help: ## Show this help message
 	@echo "  make build               Full baseline (all Bicep layers in order)"
 	@echo "  make deploy-subscription Deploy bicep/subscription.bicep (RGs)"
 	@echo "  make deploy-network      Deploy bicep/network.bicep (VNet + subnets)"
-	@echo "  make deploy-monitoring   Deploy bicep/monitoring.bicep (action group)"
+	@echo "  make deploy-monitoring   Deploy bicep/monitoring.bicep (workspace + action group)"
 	@echo "  make deploy-policy       Deploy bicep/policy.bicep (defs + assignments)"
+	@echo "  make deploy-activitylog  Deploy bicep/activitylog.bicep (Activity Log → workspace)"
 	@echo "  make deploy-security     Deploy bicep/security.bicep (KV + RBAC + ACL)"
 	@echo "  make whatif-subscription Preview subscription.bicep changes"
 	@echo "  make whatif-network      Preview network.bicep changes"
 	@echo "  make whatif-monitoring   Preview monitoring.bicep changes"
 	@echo "  make whatif-policy       Preview policy.bicep changes"
+	@echo "  make whatif-activitylog  Preview activitylog.bicep changes"
 	@echo "  make whatif-security     Preview security.bicep changes"
 	@echo "  make deploy-tailscale          Deploy the Tailscale subnet router VM"
 	@echo "  make whatif-tailscale          Preview tailscale.bicep changes"
@@ -124,6 +126,22 @@ whatif-policy: ## Preview policy.bicep changes
 		--location $(LOCATION) \
 		--template-file bicep/policy.bicep
 
+.PHONY: deploy-activitylog
+deploy-activitylog: ## Deploy activity log diagnostics (subscription Activity Log → workspace)
+	@echo -e "$(BLUE)Deploying bicep/activitylog.bicep...$(NC)"
+	@az deployment sub create \
+		--location $(LOCATION) \
+		--name activitylog-baseline \
+		--template-file bicep/activitylog.bicep \
+		--output none
+	@echo -e "  $(GREEN)✓$(NC) activity log diagnostics deployed"
+
+.PHONY: whatif-activitylog
+whatif-activitylog: ## Preview activitylog.bicep changes
+	@az deployment sub what-if \
+		--location $(LOCATION) \
+		--template-file bicep/activitylog.bicep
+
 .PHONY: deploy-security
 deploy-security: ## Deploy security Bicep (Key Vault + RBAC + network ACL)
 	@echo -e "$(BLUE)Deploying bicep/security.bicep...$(NC)"
@@ -150,7 +168,7 @@ whatif-security: ## Preview security.bicep changes
 		--parameters homeIp=$$HOME_IP adminObjectId=$$ADMIN_OBJECT_ID automationObjectId=$$AUTOMATION_OBJECT_ID
 
 .PHONY: build
-build: deploy-subscription deploy-policy deploy-network deploy-monitoring deploy-security ## Full baseline (all Bicep layers)
+build: deploy-subscription deploy-policy deploy-network deploy-monitoring deploy-activitylog deploy-security ## Full baseline (all Bicep layers)
 	@echo -e "$(GREEN)✓$(NC) Lab baseline deployed"
 
 .PHONY: deploy-tailscale

@@ -52,8 +52,9 @@ Order matters — later layers depend on resource groups from earlier ones:
 1. subscription.bicep   → creates resource groups (sub scope)
 2. policy.bicep         → assignments (sub scope); must follow subscription
 3. network.bicep        → VNet + subnets in rg-lab-network
-4. monitoring.bicep     → action group in rg-lab-monitoring
-5. security.bicep       → Key Vault + RBAC in rg-lab-security
+4. monitoring.bicep     → Log Analytics workspace + action group in rg-lab-monitoring
+5. activitylog.bicep    → subscription Activity Log diagnostic settings (sub scope); must follow monitoring
+6. security.bicep       → Key Vault + RBAC in rg-lab-security
 ```
 
 `make build` / `.\deploy.ps1 build` runs all five in order.

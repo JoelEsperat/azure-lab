@@ -26,7 +26,7 @@ Subscription: azure-lab
 │   ├── Policy: Require tag      → env=lab (audit)
 │   └── Policy: Deny public IPs  → enforce
 │
-├── rg-lab-monitoring   ← Action groups, alert rules, budgets
+├── rg-lab-monitoring   ← Log Analytics workspace, action groups, alert rules
 ├── rg-lab-network   ← VNet, NSGs, subnets, Tailscale subnet router
 ├── rg-lab-security     ← Key Vault, managed identities
 └── rg-lab-workloads    ← Workloads (compute, storage, AI)
@@ -68,11 +68,13 @@ Home devices ──── Tailscale tailnet ──── vm-tailscale (Azure, sn
 | Image | Ubuntu 24.04 |
 | Subnet | `snet-gateway` (10.0.0.0/24) |
 | Public IP | Standard Static (required for internet connectivity) |
-| NSG | Empty (no inbound rules) |
+| NSG | SSH from VNet only |
 | IP forwarding | Enabled via cloud-init (`net.ipv4.ip_forward=1`) |
 | Tailscale | Enabled via cloud-init - advertises `10.0.0.0/16` on my tailnet |
 
 Deployed via `bicep/tailscale.bicep`, wrapped by `tailscale/create-tailscale.sh` (which also approves the subnet route via the Tailscale API). Destroyed via `tailscale/destroy-tailscale.sh`.
+
+The deployment also installs the Azure Monitor Agent, attaches a Data Collection Rule that forwards syslogs and performance counters to the Log Analytics workspace, and forwards NSG diagnostic logs to the workspace.
 
 ---
 
@@ -91,9 +93,26 @@ Scope: subscription scope
 
 ## Monitoring
 
+### Workspace
+
+A single Log Analytics workspace is the central sink for all diagnostics. The free tier (first 5 GB/month of ingestion, 30 days retention) is sufficient for my lab.
+
+### Diagnostic sources
+
+| Source | Data | Table(s) |
+|---|---|---|
+| Subscription Activity Log | Resources lifecycle (create/update/delete), policy evaluations, security alerts, service health, resource health | `AzureActivity` |
+| Key Vault | `AuditEvent` — all secret/key access and operations | `AzureDiagnostics` |
+| NSG (`nsg-tailscale`) | `NetworkSecurityGroupEvent`, `NetworkSecurityGroupRuleCounter` | `AzureDiagnostics` |
+| Tailscale VM | `auth`/`authpriv` syslog (Info), `daemon`/`kern`/`syslog` (Warning) | `Syslog` |
+| Tailscale VM | CPU %, available memory MB, disk % free, network bytes in/out (every min) | `Perf` |
+| Tailscale VM | Heartbeat (every min) | `Heartbeat` |
+
+### Alerting
+
 | Resource | Purpose |
 |---|---|
-| `ag-lab-alerts` (Action Group) | Email for all alert rules |
+| `ag-lab-alerts` (Action Group) | Email receiver for all alert rules |
 
 ---
 
@@ -101,10 +120,10 @@ Scope: subscription scope
 
 | Resource | Purpose |
 |---|---|
-| Key Vault | Store SP credentials, secrets |
+| Key Vault | SP credentials, secrets |
 | `sp-lab-automation` | Non-interactive deployments |
 
-No Defender for Cloud plans enabled — default free tier only.
+Key Vault `AuditEvent` diagnostic logs are forwarded to the Log Analytics workspace. No Defender for Cloud plans enabled — default free tier only.
 
 ---
 
@@ -119,9 +138,10 @@ bicep/
 ├── subscription.bicep   ← sub scope: resource groups
 ├── policy.bicep         ← sub scope: custom defs + assignments
 ├── network.bicep        ← rg-lab-network: vnet-lab + snet-gateway
-├── monitoring.bicep     ← rg-lab-monitoring: action group
-├── security.bicep       ← rg-lab-security: Key Vault + RBAC + network ACL
-└── tailscale.bicep      ← rg-lab-network: Tailscale VM + NIC + NSG + PIP (on-demand)
+├── monitoring.bicep     ← rg-lab-monitoring: Log Analytics workspace + action group
+├── activitylog.bicep    ← sub scope: subscription Activity Log → workspace
+├── security.bicep       ← rg-lab-security: Key Vault + RBAC + ACL + KV diagnostics
+└── tailscale.bicep      ← rg-lab-network: Tailscale VM + NIC + NSG + PIP + AMA + DCR (on-demand)
 
 scripts/
 └── bootstrap.sh         ← one-time: prerequisites, service principal, providers
@@ -145,7 +165,8 @@ make build                  # all Bicep layers in order
 make deploy-subscription    # bicep/subscription.bicep — resource groups
 make deploy-policy          # bicep/policy.bicep — definitions + assignments
 make deploy-network         # bicep/network.bicep — VNet + subnets
-make deploy-monitoring      # bicep/monitoring.bicep — action group
+make deploy-monitoring      # bicep/monitoring.bicep — Log Analytics workspace + action group
+make deploy-activitylog     # bicep/activitylog.bicep — subscription Activity Log → workspace
 make deploy-security        # bicep/security.bicep — Key Vault + RBAC + ACL
 
 # Preview before applying (one per layer)
@@ -153,15 +174,20 @@ make whatif-subscription
 make whatif-policy
 make whatif-network
 make whatif-monitoring
+make whatif-activitylog
 make whatif-security
 ```
 
+**Windows:** replace `make <target>` with `.\deploy.ps1 <target>`.
+
 ### On-demand resources
 
-To keep costs down, the Tailscale VM (and the public IP) is created on-demand:
+To keep costs down (VM, public IP, disk), the Tailscale VM is created on-demand:
 
 ```bash
 make deploy-tailscale    # bicep/tailscale.bicep + tailnet route approval
 make whatif-tailscale    # dry run
 make destroy-tailscale   # destroy VM and remove from tailnet
 ```
+
+The deployment installs the Azure Monitor Agent and creates a Data Collection Rule.

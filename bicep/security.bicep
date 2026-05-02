@@ -15,8 +15,13 @@ param adminObjectId string = ''
 @description('Object ID of the automation service principal. Granted Key Vault Secrets User.')
 param automationObjectId string = ''
 
-// Vault name: deterministic 6-char suffix from subscription ID, matching the bash convention
 var keyVaultName = 'kv-lab-${substring(replace(subscription().subscriptionId, '-', ''), 0, 6)}'
+var lawName      = 'law-lab-${substring(replace(subscription().subscriptionId, '-', ''), 0, 6)}'
+
+resource law 'Microsoft.OperationalInsights/workspaces@2023-09-01' existing = {
+  name: lawName
+  scope: resourceGroup('rg-lab-monitoring')
+}
 
 // Built-in Key Vault RBAC role definition GUIDs
 var roleSecretsOfficer = 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7'
@@ -65,6 +70,20 @@ resource automationAssignment 'Microsoft.Authorization/roleAssignments@2022-04-0
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roleSecretsUser)
     principalId: automationObjectId
     principalType: 'ServicePrincipal'
+  }
+}
+
+resource kvDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: 'diag-kv'
+  scope: kv
+  properties: {
+    workspaceId: law.id
+    logs: [
+      {
+        category: 'AuditEvent'
+        enabled: true
+      }
+    ]
   }
 }
 

@@ -29,8 +29,13 @@ param adminSshPubkey string
 @secure()
 param tsAuthKey string
 
-// Cloud-init template loaded at compile time; auth key substituted at deploy time
 var cloudInit = base64(replace(loadTextContent('../tailscale/cloud-init.yaml'), '\${TS_AUTHKEY}', tsAuthKey))
+var lawName   = 'law-lab-${substring(replace(subscription().subscriptionId, '-', ''), 0, 6)}'
+
+resource law 'Microsoft.OperationalInsights/workspaces@2023-09-01' existing = {
+  name: lawName
+  scope: resourceGroup('rg-lab-monitoring')
+}
 
 resource subnet 'Microsoft.Network/virtualNetworks/subnets@2024-05-01' existing = {
   name: '${vnetName}/${subnetName}'
@@ -143,6 +148,103 @@ resource vm 'Microsoft.Compute/virtualMachines@2024-07-01' = {
         }
       ]
     }
+  }
+}
+
+resource dcr 'Microsoft.Insights/dataCollectionRules@2023-03-11' = {
+  name: 'dcr-tailscale-vm'
+  location: location
+  tags: tags
+  properties: {
+    dataSources: {
+      syslog: [
+        {
+          name: 'syslog-auth'
+          streams: ['Microsoft-Syslog']
+          facilityNames: ['auth', 'authpriv']
+          // Info and above: captures successful SSH logins as well as failures
+          logLevels: ['Info', 'Notice', 'Warning', 'Error', 'Critical', 'Alert', 'Emergency']
+        }
+        {
+          name: 'syslog-system'
+          streams: ['Microsoft-Syslog']
+          facilityNames: ['daemon', 'syslog', 'kern']
+          logLevels: ['Warning', 'Error', 'Critical', 'Alert', 'Emergency']
+        }
+      ]
+      performanceCounters: [
+        {
+          name: 'perf-basic'
+          streams: ['Microsoft-Perf']
+          samplingFrequencyInSeconds: 60
+          counterSpecifiers: [
+            'Processor(*)\\% Processor Time'
+            'Memory\\Available MBytes Memory'
+            'LogicalDisk(*)\\% Free Space'
+            'Network Interface(*)\\Total Bytes Transmitted'
+            'Network Interface(*)\\Total Bytes Received'
+          ]
+        }
+      ]
+    }
+    destinations: {
+      logAnalytics: [
+        {
+          name: 'law-dest'
+          workspaceResourceId: law.id
+        }
+      ]
+    }
+    dataFlows: [
+      {
+        streams: ['Microsoft-Syslog']
+        destinations: ['law-dest']
+      }
+      {
+        streams: ['Microsoft-Perf']
+        destinations: ['law-dest']
+      }
+    ]
+  }
+}
+
+resource amaExtension 'Microsoft.Compute/virtualMachines/extensions@2024-07-01' = {
+  parent: vm
+  name: 'AzureMonitorLinuxAgent'
+  location: location
+  properties: {
+    publisher: 'Microsoft.Azure.Monitor'
+    type: 'AzureMonitorLinuxAgent'
+    typeHandlerVersion: '1.0'
+    autoUpgradeMinorVersion: true
+    enableAutomaticUpgrade: true
+  }
+}
+
+resource dcrAssociation 'Microsoft.Insights/dataCollectionRuleAssociations@2023-03-11' = {
+  name: 'dcra-tailscale-vm'
+  scope: vm
+  properties: {
+    dataCollectionRuleId: dcr.id
+  }
+  dependsOn: [amaExtension]
+}
+
+resource nsgDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: 'diag-nsg'
+  scope: nsg
+  properties: {
+    workspaceId: law.id
+    logs: [
+      {
+        category: 'NetworkSecurityGroupEvent'
+        enabled: true
+      }
+      {
+        category: 'NetworkSecurityGroupRuleCounter'
+        enabled: true
+      }
+    ]
   }
 }
 
