@@ -1,8 +1,8 @@
 #!/bin/bash
-# destroy-ts-subnet-router.sh — Delete the Tailscale subnet router VM and its resources (IPv4, disks, NSG, etc),
+# destroy-tailscale.sh — Delete the Tailscale subnet router VM and its resources (IPv4, disks, NSG, etc),
 # and remove the device from the Tailscale tailnet.
 # Usage:
-#   chmod +x ts-subnet-router/destroy-ts-subnet-router.sh && ./ts-subnet-router/destroy-ts-subnet-router.sh
+#   chmod +x tailscale/destroy-tailscale.sh && ./tailscale/destroy-tailscale.sh
 
 set -euo pipefail
 
@@ -11,12 +11,10 @@ ENV_FILE="${SCRIPT_DIR}/../.env"
 [[ -f "$ENV_FILE" ]] && source "$ENV_FILE"
 
 RG="rg-lab-network"
-VM_NAME="vm-ts-subnet-router"
+VM_NAME="vm-tailscale"
 NIC_NAME="nic-tailscale"
 PIP_NAME="pip-tailscale"
 NSG_NAME="nsg-tailscale"
-VNET="vnet-lab"
-SUBNET="snet-gateway"
 TS_API_KEY="${TS_API_KEY:-}"
 
 echo "→ Removing device from Tailscale tailnet..."
@@ -24,7 +22,7 @@ if [[ -n "$TS_API_KEY" ]]; then
   DEVICE_IDS=$(curl -sf \
     -H "Authorization: Bearer ${TS_API_KEY}" \
     "https://api.tailscale.com/api/v2/tailnet/-/devices" \
-    | jq -r '.devices[] | select(.hostname == "azure-subnet-router") | .id' 2>/dev/null || true)
+    | jq -r '.devices[] | select(.hostname == "tailscale") | .id' 2>/dev/null || true)
   if [[ -n "$DEVICE_IDS" ]]; then
     while IFS= read -r id; do
       curl -sf -X DELETE \

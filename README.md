@@ -7,7 +7,7 @@ This document describes the architecture of my Azure lab. The goal is to build a
 ## Design Principles
 
 - **Budget** under $10/month
-- **Single subscription** and **single region** (East US)
+- **Single subscription** and **single region** (Central US)
 - **Governance** — policies enforce allowed SKU, location, and tagging
 - **Private connectivity** - the Azure VNet is an extension of my home network - no internet exposure
 - **Zero-trust hybrid connectivity** — the Azure VNet is connected to my Tailscale tailnet, providing zero trust networking - the only component with internet connectivity is the Tailscale subnet router VM - to keep the cost low the subnet router VM and the public IPv4 are provisioned only when needed
@@ -21,8 +21,8 @@ This document describes the architecture of my Azure lab. The goal is to build a
 Subscription: azure-lab
 │
 ├── Governance (subscription-scoped)
-│   ├── Policy: Allowed locations → eastus
-│   ├── Policy: Allowed VM SKUs  → B1s, B1ms, B2s
+│   ├── Policy: Allowed locations → centralus
+│   ├── Policy: Allowed VM SKUs  → B1s, B2pts_v2
 │   ├── Policy: Require tag      → env=lab (audit)
 │   └── Policy: Deny public IPs  → enforce
 │
@@ -37,11 +37,11 @@ Subscription: azure-lab
 ## Network Topology
 
 ```
-vnet-lab  10.10.0.0/16   (rg-lab-network, eastus)
+vnet-lab  10.0.0.0/16   (rg-lab-network, centralus)
 │
-├── snet-gateway    10.10.0.0/24   hybrid connectivity (Tailscale VM)
-└── snet-pes        10.10.1.0/24   private endpoints
-└── snet-workloads  10.10.2.0/24   workloads
+├── snet-gateway    10.0.0.0/24   hybrid connectivity (Tailscale VM)
+└── snet-pes        10.0.1.0/24   private endpoints
+└── snet-workloads  10.0.2.0/24   workloads
 ```
 
 The Tailscale subnet router is the only ingress path into the VNet. It is much cheaper than a VPN Gateway and sufficient for my homelab, and it provides zero trust networking. 
@@ -50,29 +50,29 @@ The Tailscale subnet router is the only ingress path into the VNet. It is much c
 
 ## Hybrid Connectivity (Tailscale)
 
-Connectivity with my home network and devices is provided through Tailscale using a lightweight Ubuntu VM that joins the tailnet and advertises the entire Azure subnet `10.10.0.0/16`.
+Connectivity with my home network and devices is provided through Tailscale using a lightweight Ubuntu VM that joins the tailnet and advertises the entire Azure subnet `10.0.0.0/16`.
 
 ```
-Home devices ──── Tailscale tailnet ──── vm-ts-subnet-router (Azure, snet-gateway)
+Home devices ──── Tailscale tailnet ──── vm-tailscale (Azure, snet-gateway)
                                                │
-                                         vnet-lab 10.10.0.0/16
+                                         vnet-lab 10.0.0.0/16
                                                │
                                          Azure workloads
 ```
 
 | Property | Value |
 |---|---|
-| VM name | `vm-ts-subnet-router` |
+| VM name | `vm-tailscale` |
 | Resource group | `rg-lab-network` |
-| Size | `Standard_B1s` |
+| Size | `Standard_B2pts_v2` |
 | Image | Ubuntu 24.04 |
-| Subnet | `snet-gateway` (10.10.0.0/24) |
+| Subnet | `snet-gateway` (10.0.0.0/24) |
 | Public IP | Standard Static (required for internet connectivity) |
 | NSG | Empty (no inbound rules) |
 | IP forwarding | Enabled via cloud-init (`net.ipv4.ip_forward=1`) |
-| Tailscale | Enabled via cloud-init - advertises `10.10.0.0/16` on my tailnet |
+| Tailscale | Enabled via cloud-init - advertises `10.0.0.0/16` on my tailnet |
 
-Deployed via `bicep/subnet-router.bicep`, wrapped by `ts-subnet-router/create-ts-subnet-router.sh` (which also approves the subnet route via the Tailscale API). Destroyed via `ts-subnet-router/destroy-ts-subnet-router.sh` (imperative cleanup + tailnet device removal).
+Deployed via `bicep/tailscale.bicep`, wrapped by `tailscale/create-tailscale.sh` (which also approves the subnet route via the Tailscale API). Destroyed via `tailscale/destroy-tailscale.sh` (imperative cleanup + tailnet device removal).
 
 ---
 
@@ -82,7 +82,7 @@ Scope: subscription scope
 
 | Policy | Effect | Purpose |
 |---|---|---|
-| Allowed locations | Deny | Single region: `eastus` |
+| Allowed locations | Deny | Single region: `centralus` |
 | Allowed VM SKUs | Deny | Prevent accidental use of expensive SKUs |
 | Require tag `env=lab` | Audit | Visibility; not blocking |
 | Deny public IPs (custom) | Deny | Block public IPs except for the Tailscale VM |
@@ -121,15 +121,15 @@ bicep/
 ├── network.bicep        ← rg-lab-network: vnet-lab + snet-gateway
 ├── monitoring.bicep     ← rg-lab-monitoring: action group
 ├── security.bicep       ← rg-lab-security: Key Vault + RBAC + network ACL
-└── subnet-router.bicep  ← rg-lab-network: Tailscale VM + NIC + NSG + PIP (on-demand)
+└── tailscale.bicep      ← rg-lab-network: Tailscale VM + NIC + NSG + PIP (on-demand)
 
 scripts/
 └── bootstrap.sh         ← one-time: prerequisites, service principal, providers
 
-ts-subnet-router/
-├── cloud-init.yaml                  ← VM bootstrap (loaded by subnet-router.bicep)
-├── create-ts-subnet-router.sh       ← wraps Bicep deploy + tailnet route approval
-└── destroy-ts-subnet-router.sh      ← imperative cleanup + tailnet device removal
+tailscale/
+├── cloud-init.yaml          ← VM bootstrap (loaded by tailscale.bicep)
+├── create-tailscale.sh      ← wraps Bicep deploy + tailnet route approval
+└── destroy-tailscale.sh     ← imperative cleanup + tailnet device removal
 ```
 
 ### Deployment order
@@ -161,8 +161,8 @@ make whatif-security
 To keep costs down, the Tailscale VM is created on-demand:
 
 ```bash
-make deploy-ts-subnet-router    # bicep/subnet-router.bicep + tailnet route approval
-make whatif-ts-subnet-router    # preview before applying
-make destroy-ts-subnet-router   # tear down VM + tailnet device
+make deploy-tailscale    # bicep/tailscale.bicep + tailnet route approval
+make whatif-tailscale    # preview before applying
+make destroy-tailscale   # tear down VM + tailnet device
 ```
 

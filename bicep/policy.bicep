@@ -1,18 +1,17 @@
 targetScope = 'subscription'
 
 @description('Azure region for assignments that require a location (e.g. system-assigned identity).')
-param location string = 'eastus'
+param location string = 'centralus'
 
 @description('Allowed VM SKUs (built-in policy parameter).')
 param allowedVmSkus array = [
-  'standard_b1s'
-  'standard_b1ms'
-  'standard_b2s'
+  'Standard_B1s'
+  'Standard_B2pts_v2'
 ]
 
 @description('Allowed Azure regions (built-in policy parameter).')
 param allowedLocations array = [
-  'eastus'
+  'centralus'
 ]
 
 @description('Resource group name where public IPs are allowed (Tailscale subnet router).')

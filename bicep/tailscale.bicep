@@ -1,5 +1,5 @@
 @description('Azure region for the subnet router resources.')
-param location string = 'eastus'
+param location string = 'centralus'
 
 @description('Tags applied to all resources.')
 param tags object = {
@@ -13,10 +13,10 @@ param vnetName string = 'vnet-lab'
 param subnetName string = 'snet-gateway'
 
 @description('Static private IP for the subnet router NIC.')
-param privateIpAddress string = '10.10.0.10'
+param privateIpAddress string = '10.0.0.10'
 
 @description('VM size. Must be allowed by the Allowed VM SKUs policy.')
-param vmSize string = 'Standard_B1s'
+param vmSize string = 'Standard_B2pts_v2'
 
 @description('Admin username on the VM.')
 param adminUsername string = 'azureuser'
@@ -30,7 +30,7 @@ param adminSshPubkey string
 param tsAuthKey string
 
 // Cloud-init template loaded at compile time; auth key substituted at deploy time
-var cloudInit = base64(replace(loadTextContent('../ts-subnet-router/cloud-init.yaml'), '\${TS_AUTHKEY}', tsAuthKey))
+var cloudInit = base64(replace(loadTextContent('../tailscale/cloud-init.yaml'), '\${TS_AUTHKEY}', tsAuthKey))
 
 resource subnet 'Microsoft.Network/virtualNetworks/subnets@2024-05-01' existing = {
   name: '${vnetName}/${subnetName}'
@@ -98,7 +98,7 @@ resource nic 'Microsoft.Network/networkInterfaces@2024-05-01' = {
 }
 
 resource vm 'Microsoft.Compute/virtualMachines@2024-07-01' = {
-  name: 'vm-ts-subnet-router'
+  name: 'vm-tailscale'
   location: location
   tags: tags
   properties: {
@@ -109,7 +109,7 @@ resource vm 'Microsoft.Compute/virtualMachines@2024-07-01' = {
       imageReference: {
         publisher: 'Canonical'
         offer: 'ubuntu-24_04-lts'
-        sku: 'server'
+        sku: 'server-arm64'
         version: 'latest'
       }
       osDisk: {
@@ -121,7 +121,7 @@ resource vm 'Microsoft.Compute/virtualMachines@2024-07-01' = {
       }
     }
     osProfile: {
-      computerName: 'azure-subnet-router'
+      computerName: 'tailscale'
       adminUsername: adminUsername
       customData: cloudInit
       linuxConfiguration: {

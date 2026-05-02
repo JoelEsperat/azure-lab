@@ -1,5 +1,5 @@
 @description('Azure region for the Key Vault.')
-param location string = 'eastus'
+param location string = 'centralus'
 
 @description('Tags applied to the Key Vault.')
 param tags object = {

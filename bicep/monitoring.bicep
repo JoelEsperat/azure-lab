@@ -1,6 +1,3 @@
-@description('Azure region for the action group.')
-param location string = 'eastus'
-
 @description('Tags applied to the action group.')
 param tags object = {
   env: 'lab'
@@ -11,7 +8,7 @@ param adminEmail string
 
 resource actionGroup 'Microsoft.Insights/actionGroups@2023-01-01' = {
   name: 'ag-lab-alerts'
-  location: location
+  location: 'global'
   tags: tags
   properties: {
     groupShortName: 'lab-alerts'

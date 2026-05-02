@@ -11,7 +11,7 @@ YELLOW := \033[1;33m
 RED := \033[0;31m
 NC := \033[0m
 
-LOCATION := eastus
+LOCATION := centralus
 RG_NETWORK := rg-lab-network
 RG_MONITORING := rg-lab-monitoring
 RG_SECURITY := rg-lab-security
@@ -42,9 +42,9 @@ help: ## Show this help message
 	@echo "  make whatif-monitoring   Preview monitoring.bicep changes"
 	@echo "  make whatif-policy       Preview policy.bicep changes"
 	@echo "  make whatif-security     Preview security.bicep changes"
-	@echo "  make deploy-ts-subnet-router   Deploy the Tailscale subnet router VM"
-	@echo "  make whatif-ts-subnet-router   Preview subnet-router.bicep changes"
-	@echo "  make destroy-ts-subnet-router  Destroy the Tailscale subnet router VM"
+	@echo "  make deploy-tailscale          Deploy the Tailscale subnet router VM"
+	@echo "  make whatif-tailscale          Preview tailscale.bicep changes"
+	@echo "  make destroy-tailscale         Destroy the Tailscale subnet router VM"
 	@echo ""
 	@echo "Environment:"
 	@echo "  make env                 Show current environment configuration"
@@ -153,25 +153,25 @@ whatif-security: ## Preview security.bicep changes
 build: deploy-subscription deploy-policy deploy-network deploy-monitoring deploy-security ## Full baseline (all Bicep layers)
 	@echo -e "$(GREEN)✓$(NC) Lab baseline deployed"
 
-.PHONY: deploy-ts-subnet-router
-deploy-ts-subnet-router: ## Deploy the Tailscale subnet router VM (Bicep + tailnet route approval)
+.PHONY: deploy-tailscale
+deploy-tailscale: ## Deploy the Tailscale subnet router VM (Bicep + tailnet route approval)
 	@echo -e "$(BLUE)Deploying Tailscale subnet router VM...$(NC)"
-	@chmod +x ts-subnet-router/create-ts-subnet-router.sh
-	@./ts-subnet-router/create-ts-subnet-router.sh
+	@chmod +x tailscale/create-tailscale.sh
+	@./tailscale/create-tailscale.sh
 
-.PHONY: whatif-ts-subnet-router
-whatif-ts-subnet-router: ## Preview subnet-router.bicep changes
+.PHONY: whatif-tailscale
+whatif-tailscale: ## Preview tailscale.bicep changes
 	@if [ -z "$$ADMIN_SSH_PUBKEY" ]; then echo -e "  $(RED)✗$(NC) ADMIN_SSH_PUBKEY not set" && exit 1; fi
 	@az deployment group what-if \
 		--resource-group $(RG_NETWORK) \
-		--template-file bicep/subnet-router.bicep \
+		--template-file bicep/tailscale.bicep \
 		--parameters adminSshPubkey="$$ADMIN_SSH_PUBKEY" tsAuthKey="dummy-for-whatif"
 
-.PHONY: destroy-ts-subnet-router
-destroy-ts-subnet-router: ## Destroy the Tailscale subnet router VM (and clean up tailnet device)
+.PHONY: destroy-tailscale
+destroy-tailscale: ## Destroy the Tailscale subnet router VM (and clean up tailnet device)
 	@echo -e "$(YELLOW)Destroying Tailscale subnet router VM...$(NC)"
-	@chmod +x ts-subnet-router/destroy-ts-subnet-router.sh
-	@./ts-subnet-router/destroy-ts-subnet-router.sh
+	@chmod +x tailscale/destroy-tailscale.sh
+	@./tailscale/destroy-tailscale.sh
 
 .PHONY: validate
 validate: ## Validate environment and prerequisites

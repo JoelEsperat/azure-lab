@@ -1,7 +1,7 @@
 targetScope = 'subscription'
 
 @description('Azure region for all resources.')
-param location string = 'eastus'
+param location string = 'centralus'
 
 @description('Tags applied to every resource group.')
 param tags object = {

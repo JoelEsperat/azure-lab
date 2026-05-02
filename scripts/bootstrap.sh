@@ -195,8 +195,10 @@ ENV_FILE=".env"
 # Always update a key in .env (adds line if missing)
 upsert_env() {
   local key="$1" value="$2"
-  if grep -q "^${key}=" "$ENV_FILE" 2>/dev/null; then
-    sed -i '' "s|^${key}=.*|${key}=${value}|" "$ENV_FILE"
+  touch "$ENV_FILE"
+  if grep -q -E "^${key}=" "$ENV_FILE" 2>/dev/null; then
+    # Portable in-place update: write to temp then move (works on Linux and macOS)
+    awk -v k="$key" -v v="$value" 'BEGIN{FS=OFS="="} $1==k{$0=k"="v; found=1} {print} END{if(!found) print k"="v}' "$ENV_FILE" > "${ENV_FILE}.tmp" && mv "${ENV_FILE}.tmp" "$ENV_FILE"
   else
     echo "${key}=${value}" >> "$ENV_FILE"
   fi
@@ -216,7 +218,7 @@ if [[ ! -f "$ENV_FILE" ]]; then
   cat > "$ENV_FILE" <<EOF
 AZURE_SUBSCRIPTION_ID=$SUBSCRIPTION_ID
 AZURE_TENANT_ID=$TENANT_ID
-AZURE_LOCATION=eastus
+AZURE_LOCATION=centralus
 
 ADMIN_EMAIL=
 ADMIN_OBJECT_ID=$ADMIN_OBJECT_ID
@@ -236,7 +238,7 @@ else
   upsert_env "AUTOMATION_SP_NAME"     "$SP_NAME"
   upsert_env "AUTOMATION_OBJECT_ID"   "$AUTOMATION_OBJECT_ID"
   upsert_env "AUTOMATION_CLIENT_ID"   "${SP_CLIENT_ID:-}"
-  init_env   "AZURE_LOCATION"         "eastus"
+  init_env   "AZURE_LOCATION"         "centralus"
   init_env   "ADMIN_EMAIL"            ""
   init_env   "ADMIN_SSH_PUBKEY"       ""
   # Only write the secret when we just created a new SP; never overwrite an existing one
