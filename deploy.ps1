@@ -43,15 +43,8 @@ function Get-HomeIp {
 }
 
 function Invoke-Az([string[]]$Args) {
-    if ($Args -contains 'what-if') {
-        az @Args
-    } else {
-        $output = az @Args 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            $output | ForEach-Object { Write-Host "$_" }
-            throw "az $($Args[0]) failed (exit $LASTEXITCODE)"
-        }
-    }
+    az @Args
+    if ($LASTEXITCODE -ne 0) { throw "az $($Args[0]) failed (exit $LASTEXITCODE)" }
 }
 
 # ── Targets ──────────────────────────────────────────────────────────────────
