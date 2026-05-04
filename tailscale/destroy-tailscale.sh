@@ -22,7 +22,7 @@ if [[ -n "$TS_API_KEY" ]]; then
   DEVICE_IDS=$(curl -sf \
     -H "Authorization: Bearer ${TS_API_KEY}" \
     "https://api.tailscale.com/api/v2/tailnet/-/devices" \
-    | jq -r '.devices[] | select(.hostname == "tailscale") | .id' 2>/dev/null || true)
+    | jq -r '.devices[] | select(.hostname == "azure") | .id' 2>/dev/null || true)
   if [[ -n "$DEVICE_IDS" ]]; then
     while IFS= read -r id; do
       curl -sf -X DELETE \

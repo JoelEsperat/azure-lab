@@ -32,7 +32,7 @@ if ($env:TS_API_KEY) {
     $headers = @{ Authorization = "Bearer $env:TS_API_KEY" }
     try {
         $resp    = Invoke-RestMethod -Uri "https://api.tailscale.com/api/v2/tailnet/-/devices" -Headers $headers -UseBasicParsing
-        $devices = $resp.devices | Where-Object { $_.hostname -eq "tailscale" }
+        $devices = $resp.devices | Where-Object { $_.hostname -eq "azure" }
         if ($devices) {
             foreach ($device in $devices) {
                 try {

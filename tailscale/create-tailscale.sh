@@ -32,7 +32,7 @@ for i in $(seq 1 20); do
   DEVICE_ID=$(curl -sf \
     -H "Authorization: Bearer ${TS_API_KEY}" \
     "https://api.tailscale.com/api/v2/tailnet/-/devices" \
-    | jq -r '([.devices[] | select(.hostname == "tailscale")] | sort_by(.lastSeen) | last | .id) // empty' 2>/dev/null || true)
+    | jq -r '([.devices[] | select(.hostname == "azure")] | sort_by(.lastSeen) | last | .id) // empty' 2>/dev/null || true)
   if [[ -n "$DEVICE_ID" ]]; then
     echo "  ✓ Device found: $DEVICE_ID"
     break

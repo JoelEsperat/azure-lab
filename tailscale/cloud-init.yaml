@@ -16,5 +16,5 @@ runcmd:
       --advertise-routes=10.0.0.0/16
       --accept-dns=false
       --accept-routes=true
-      --hostname=tailscale
+      --hostname=azure
       --ssh

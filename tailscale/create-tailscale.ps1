@@ -49,7 +49,7 @@ $DEVICE_ID = ""
 for ($i = 1; $i -le 20; $i++) {
     try {
         $resp   = Invoke-RestMethod -Uri "https://api.tailscale.com/api/v2/tailnet/-/devices" -Headers $headers -UseBasicParsing
-        $device = $resp.devices | Where-Object { $_.hostname -eq "tailscale" } | Sort-Object lastSeen | Select-Object -Last 1
+        $device = $resp.devices | Where-Object { $_.hostname -eq "azure" } | Sort-Object lastSeen | Select-Object -Last 1
         if ($device) {
             $DEVICE_ID = $device.id
             Write-Host "  Device found: $DEVICE_ID"

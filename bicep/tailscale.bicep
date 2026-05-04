@@ -126,7 +126,7 @@ resource vm 'Microsoft.Compute/virtualMachines@2024-07-01' = {
       }
     }
     osProfile: {
-      computerName: 'tailscale'
+      computerName: 'azure'
       adminUsername: adminUsername
       customData: cloudInit
       linuxConfiguration: {

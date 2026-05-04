@@ -99,7 +99,7 @@ The Tailscale subnet router (`tailscale.bicep`) is deployed on-demand outside th
 
 Any new VM SKU must be added to `allowedVmSkus` in `policy.bicep` before deploying resources that use it.
 
-**Tailscale subnet router** — `tailscale.bicep` loads `tailscale/cloud-init.yaml` at Bicep compile time via `loadTextContent()`, substituting `${TS_AUTHKEY}` before base64-encoding it as `customData`. The VM hostname `tailscale` is hardcoded in both `cloud-init.yaml` and the create/destroy scripts (used to identify the tailnet device via Tailscale API).
+**Tailscale subnet router** — `tailscale.bicep` loads `tailscale/cloud-init.yaml` at Bicep compile time via `loadTextContent()`, substituting `${TS_AUTHKEY}` before base64-encoding it as `customData`. The Tailscale hostname `azure` is hardcoded in both `cloud-init.yaml` (via `--hostname=azure`) and the create/destroy scripts (used to identify the tailnet device via Tailscale API). The Azure VM OS hostname (`computerName`) matches.
 
 The create script deploys Bicep then polls the Tailscale API until the device appears, then approves the `10.0.0.0/16` route. The destroy script removes the tailnet device before deleting Azure resources.
 
