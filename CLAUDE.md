@@ -44,6 +44,34 @@ Copy `.env.sample` → `.env` and populate. The `.env` file is sourced by both t
 | `TS_API_KEY` | `deploy-tailscale`, `destroy-tailscale` |
 | `HOME_IP` | `deploy-security` (auto-detected via `api.ipify.org` if unset) |
 
+**GitHub Actions (optional, any OS):**
+
+Trigger manually from the Actions tab or GitHub CLI:
+```bash
+gh workflow run tailscale-create.yml
+gh workflow run tailscale-destroy.yml
+```
+The workflows call the same bash scripts and authenticate via Azure OIDC (no stored client secret). Required one-time setup — see below.
+
+## GitHub Actions setup (one-time)
+
+1. Create an app registration in Entra ID and note its **client ID** and your **tenant ID**.
+2. Add a federated credential on the app:
+   - Issuer: `https://token.actions.githubusercontent.com`
+   - Subject: `repo:<org>/<repo>:ref:refs/heads/main`
+   - Audience: `api://AzureADTokenExchange`
+3. Assign the app the **Contributor** role on `rg-lab-network` only.
+4. Add these repository secrets (Settings → Secrets → Actions):
+
+| Secret | Value |
+|---|---|
+| `AZURE_CLIENT_ID` | App registration client ID |
+| `AZURE_TENANT_ID` | Entra tenant ID |
+| `AZURE_SUBSCRIPTION_ID` | Azure subscription ID |
+| `ADMIN_SSH_PUBKEY` | SSH public key for VM admin |
+| `TS_AUTHKEY` | Tailscale auth key |
+| `TS_API_KEY` | Tailscale API key |
+
 ## Deployment order
 
 Order matters — later layers depend on resource groups from earlier ones:

@@ -1,0 +1,25 @@
+name: Tailscale – Destroy VM
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # required for OIDC
+  contents: read
+
+jobs:
+  destroy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Destroy Tailscale VM
+        env:
+          TS_API_KEY: ${{ secrets.TS_API_KEY }}
+        run: bash tailscale/destroy-tailscale.sh
