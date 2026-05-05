@@ -26,6 +26,13 @@ resource rgSecurity 'Microsoft.Resources/resourceGroups@2024-03-01' = {
   tags: tags
 }
 
+resource rgWorkloads 'Microsoft.Resources/resourceGroups@2024-03-01' = {
+  name: 'rg-lab-workloads'
+  location: location
+  tags: tags
+}
+
 output rgNetworkName string = rgNetwork.name
 output rgMonitoringName string = rgMonitoring.name
 output rgSecurityName string = rgSecurity.name
+output rgWorkloadsName string = rgWorkloads.name

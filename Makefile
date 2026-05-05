@@ -15,6 +15,7 @@ LOCATION := centralus
 RG_NETWORK := rg-lab-network
 RG_MONITORING := rg-lab-monitoring
 RG_SECURITY := rg-lab-security
+RG_WORKLOADS := rg-lab-workloads
 
 # Pull ADMIN_EMAIL, ADMIN_OBJECT_ID, AUTOMATION_OBJECT_ID, HOME_IP from .env if present
 -include .env
@@ -38,12 +39,14 @@ help: ## Show this help message
 	@echo "  make deploy-policy       Deploy bicep/policy.bicep (defs + assignments)"
 	@echo "  make deploy-activitylog  Deploy bicep/activitylog.bicep (Activity Log → workspace)"
 	@echo "  make deploy-security     Deploy bicep/security.bicep (KV + RBAC + ACL)"
+	@echo "  make deploy-storage      Deploy bicep/storage.bicep (blob storage account)"
 	@echo "  make whatif-subscription Preview subscription.bicep changes"
 	@echo "  make whatif-network      Preview network.bicep changes"
 	@echo "  make whatif-monitoring   Preview monitoring.bicep changes"
 	@echo "  make whatif-policy       Preview policy.bicep changes"
 	@echo "  make whatif-activitylog  Preview activitylog.bicep changes"
 	@echo "  make whatif-security     Preview security.bicep changes"
+	@echo "  make whatif-storage      Preview storage.bicep changes"
 	@echo "  make deploy-tailscale          Deploy the Tailscale subnet router VM"
 	@echo "  make whatif-tailscale          Preview tailscale.bicep changes"
 	@echo "  make destroy-tailscale         Destroy the Tailscale subnet router VM"
@@ -167,8 +170,30 @@ whatif-security: ## Preview security.bicep changes
 		--template-file bicep/security.bicep \
 		--parameters homeIp=$$HOME_IP adminObjectId=$$ADMIN_OBJECT_ID automationObjectId=$$AUTOMATION_OBJECT_ID
 
+.PHONY: deploy-storage
+deploy-storage: ## Deploy storage Bicep (blob storage account)
+	@echo -e "$(BLUE)Deploying bicep/storage.bicep...$(NC)"
+	@HOME_IP=$${HOME_IP:-$$(curl -sf https://api.ipify.org)}; \
+	if [ -z "$$HOME_IP" ]; then echo -e "  $(RED)✗$(NC) Could not detect public IP — set HOME_IP in .env" && exit 1; fi; \
+	echo -e "  $(BLUE)▶$(NC) Home IP: $$HOME_IP"; \
+	az deployment group create \
+		--resource-group $(RG_WORKLOADS) \
+		--name storage-baseline \
+		--template-file bicep/storage.bicep \
+		--parameters homeIp=$$HOME_IP \
+		--output none
+	@echo -e "  $(GREEN)✓$(NC) storage baseline deployed"
+
+.PHONY: whatif-storage
+whatif-storage: ## Preview storage.bicep changes
+	@HOME_IP=$${HOME_IP:-$$(curl -sf https://api.ipify.org)}; \
+	az deployment group what-if \
+		--resource-group $(RG_WORKLOADS) \
+		--template-file bicep/storage.bicep \
+		--parameters homeIp=$$HOME_IP
+
 .PHONY: build
-build: deploy-subscription deploy-policy deploy-network deploy-monitoring deploy-activitylog deploy-security ## Full baseline (all Bicep layers)
+build: deploy-subscription deploy-policy deploy-network deploy-monitoring deploy-activitylog deploy-security deploy-storage ## Full baseline (all Bicep layers)
 	@echo -e "$(GREEN)✓$(NC) Lab baseline deployed"
 
 .PHONY: deploy-tailscale

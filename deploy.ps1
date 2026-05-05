@@ -13,6 +13,7 @@ $LOCATION      = "centralus"
 $RG_NETWORK    = "rg-lab-network"
 $RG_MONITORING = "rg-lab-monitoring"
 $RG_SECURITY   = "rg-lab-security"
+$RG_WORKLOADS  = "rg-lab-workloads"
 
 function Import-EnvFile([string]$Path) {
     if (-not (Test-Path $Path)) { return }
@@ -75,6 +76,8 @@ Infrastructure deployment:
   whatif-policy              Preview policy.bicep changes
   whatif-activitylog         Preview activitylog.bicep changes
   whatif-security            Preview security.bicep changes
+  deploy-storage             Deploy bicep/storage.bicep (blob storage account)
+  whatif-storage             Preview storage.bicep changes
   deploy-tailscale           Deploy the Tailscale subnet router VM
   whatif-tailscale           Preview tailscale.bicep changes
   destroy-tailscale          Destroy the Tailscale subnet router VM
@@ -198,6 +201,28 @@ function Invoke-WhatIfSecurity {
         "--parameters", "homeIp=$homeIp", "adminObjectId=$env:ADMIN_OBJECT_ID", "automationObjectId=$env:AUTOMATION_OBJECT_ID"
 }
 
+function Invoke-DeployStorage {
+    $homeIp = Get-HomeIp
+    if (-not $homeIp) { throw "Could not detect public IP - set HOME_IP in .env" }
+    Write-Host "  Home IP: $homeIp"
+    Write-Host "Deploying bicep/storage.bicep..."
+    Invoke-Az "deployment", "group", "create",
+        "--resource-group", $RG_WORKLOADS,
+        "--name", "storage-baseline",
+        "--template-file", "bicep/storage.bicep",
+        "--parameters", "homeIp=$homeIp",
+        "--output", "none"
+    Write-Host "  storage baseline deployed"
+}
+
+function Invoke-WhatIfStorage {
+    $homeIp = Get-HomeIp
+    Invoke-Az "deployment", "group", "what-if",
+        "--resource-group", $RG_WORKLOADS,
+        "--template-file", "bicep/storage.bicep",
+        "--parameters", "homeIp=$homeIp"
+}
+
 function Invoke-Build {
     Invoke-DeploySubscription
     Invoke-DeployPolicy
@@ -205,6 +230,7 @@ function Invoke-Build {
     Invoke-DeployMonitoring
     Invoke-DeployActivityLog
     Invoke-DeploySecurity
+    Invoke-DeployStorage
     Write-Host "Lab baseline deployed"
 }
 
@@ -296,6 +322,8 @@ switch ($Target) {
     "deploy-activitylog"       { Invoke-DeployActivityLog }
     "whatif-activitylog"       { Invoke-WhatIfActivityLog }
     "whatif-security"          { Invoke-WhatIfSecurity }
+    "deploy-storage"           { Invoke-DeployStorage }
+    "whatif-storage"           { Invoke-WhatIfStorage }
     "deploy-tailscale"         { Invoke-DeployTailscale }
     "whatif-tailscale"         { Invoke-WhatIfTailscale }
     "destroy-tailscale"        { Invoke-DestroyTailscale }

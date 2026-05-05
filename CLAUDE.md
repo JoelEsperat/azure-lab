@@ -42,7 +42,7 @@ Copy `.env.sample` → `.env` and populate. The `.env` file is sourced by both t
 | `ADMIN_SSH_PUBKEY` | `deploy-tailscale` |
 | `TS_AUTHKEY` | `deploy-tailscale` |
 | `TS_API_KEY` | `deploy-tailscale`, `destroy-tailscale` |
-| `HOME_IP` | `deploy-security` (auto-detected via `api.ipify.org` if unset) |
+| `HOME_IP` | `deploy-security`, `deploy-storage` (auto-detected via `api.ipify.org` if unset) |
 
 **GitHub Actions (optional, any OS):**
 
@@ -83,9 +83,10 @@ Order matters — later layers depend on resource groups from earlier ones:
 4. monitoring.bicep     → Log Analytics workspace + action group in rg-lab-monitoring
 5. activitylog.bicep    → subscription Activity Log diagnostic settings (sub scope); must follow monitoring
 6. security.bicep       → Key Vault + RBAC in rg-lab-security
+7. storage.bicep        → blob storage account in rg-lab-workloads; must follow network (snet-workloads)
 ```
 
-`make build` / `.\deploy.ps1 build` runs all five in order.
+`make build` / `.\deploy.ps1 build` runs all seven in order.
 
 The Tailscale subnet router (`tailscale.bicep`) is deployed on-demand outside the baseline — create/destroy as needed to control costs.
 
@@ -104,5 +105,9 @@ Any new VM SKU must be added to `allowedVmSkus` in `policy.bicep` before deployi
 The create script deploys Bicep then polls the Tailscale API until the device appears, then approves the `10.0.0.0/16` route. The destroy script removes the tailnet device before deleting Azure resources.
 
 **Key Vault naming** — `security.bicep` derives the vault name deterministically: `kv-lab-` + first 6 chars of subscription ID (hyphens stripped). This avoids naming conflicts while keeping it reproducible.
+
+**Storage account naming** — `storage.bicep` uses the same pattern: `stlab` + first 8 chars of subscription ID (hyphens stripped). Storage account names cannot contain hyphens.
+
+**Storage network access** — Standard_LRS StorageV2 in `rg-lab-workloads`. Firewall: `defaultAction: Deny`, home IP allowlisted, `snet-workloads` (10.0.1.0/24) allowlisted via service endpoint. Access from tailnet laptop uses the home IP rule (storage resolves to a public IP; Tailscale only routes 10.0.0.0/16).
 
 **No Bicep modules or parameter files** — each `.bicep` file is self-contained with defaults. Parameters are passed inline via `--parameters` on the CLI.

@@ -39,9 +39,8 @@ Subscription: azure-lab
 ```
 vnet-lab  10.0.0.0/16   (rg-lab-network, centralus)
 │
-├── snet-gateway    10.0.0.0/24   hybrid connectivity (Tailscale VM)
-└── snet-pes        10.0.1.0/24   private endpoints
-└── snet-workloads  10.0.2.0/24   workloads
+├── snet-gateway    10.0.0.0/24   hybrid connectivity (Tailscale VM) — service endpoint: Microsoft.KeyVault
+└── snet-workloads  10.0.1.0/24   workloads — service endpoint: Microsoft.Storage
 ```
 
 The Tailscale subnet router is the only ingress path into the VNet. It is much cheaper than a VPN Gateway and sufficient for my homelab, and it provides zero trust networking. 
@@ -95,7 +94,7 @@ Scope: subscription scope
 
 ### Workspace
 
-A single Log Analytics workspace is the central sink for all diagnostics. The free tier (first 5 GB/month of ingestion, 30 days retention) is sufficient for my lab.
+A Log Analytics workspace is the central sink for all diagnostics. The free tier (first 5 GB/month of ingestion, 30 days retention) is sufficient for my lab.
 
 ### Diagnostic sources
 
@@ -113,6 +112,33 @@ A single Log Analytics workspace is the central sink for all diagnostics. The fr
 | Resource | Purpose |
 |---|---|
 | `ag-lab-alerts` (Action Group) | Email receiver for all alert rules |
+
+---
+
+## Storage
+
+A storage account in `rg-lab-workloads`, Standard LRS, accessible only from my home IP and my VNet through firewall filtering. Private Endpoint is too expensive for a small lab.
+
+| Property | Value |
+|---|---|
+| SKU | Standard_LRS |
+| Access tier | Hot |
+| Encryption at rest | AES-256, Microsoft-managed keys (always on) |
+| Encryption in transit | HTTPS only, TLS 1.2 minimum |
+| Public blob access | Disabled |
+| Network access | Firewall default-deny; home IP + `snet-workloads` allowlisted |
+
+### Containers
+
+| Name | Purpose |
+|---|---|
+| `backup` | General-purpose home backup target |
+
+### Access from my personal devices
+
+Completely removing internet exposure requires to disable the public endpoint and using a Private Endpoint, which costs $7 per month.
+
+A free and acceptable alternative is to use a Service Endpoint, accessible within the VNet. Access to the storage account outside the VNet is through a public Azure IP — Tailscale only routes the VNet IP range, so Tailscale alone is not enough. The home IP is allowlisted in the storage firewall, so direct HTTPS access from the home network works.
 
 ---
 
@@ -137,10 +163,11 @@ Bicep is the source of truth for all ARM resources. Bash (or Powershell) is rese
 bicep/
 ├── subscription.bicep   ← sub scope: resource groups
 ├── policy.bicep         ← sub scope: custom defs + assignments
-├── network.bicep        ← rg-lab-network: vnet-lab + snet-gateway
+├── network.bicep        ← rg-lab-network: vnet-lab + snet-gateway + snet-workloads
 ├── monitoring.bicep     ← rg-lab-monitoring: Log Analytics workspace + action group
 ├── activitylog.bicep    ← sub scope: subscription Activity Log → workspace
 ├── security.bicep       ← rg-lab-security: Key Vault + RBAC + ACL + KV diagnostics
+├── storage.bicep        ← rg-lab-workloads: blob storage account + backup container
 └── tailscale.bicep      ← rg-lab-network: Tailscale VM + NIC + NSG + PIP + AMA + DCR (on-demand)
 
 scripts/
@@ -168,6 +195,7 @@ make deploy-network         # bicep/network.bicep — VNet + subnets
 make deploy-monitoring      # bicep/monitoring.bicep — Log Analytics workspace + action group
 make deploy-activitylog     # bicep/activitylog.bicep — subscription Activity Log → workspace
 make deploy-security        # bicep/security.bicep — Key Vault + RBAC + ACL
+make deploy-storage         # bicep/storage.bicep — blob storage account + backup container
 
 # Preview before applying (one per layer)
 make whatif-subscription
@@ -176,6 +204,7 @@ make whatif-network
 make whatif-monitoring
 make whatif-activitylog
 make whatif-security
+make whatif-storage
 ```
 
 **Windows:** replace `make <target>` with `.\deploy.ps1 <target>`.

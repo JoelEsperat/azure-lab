@@ -34,5 +34,19 @@ resource snetGateway 'Microsoft.Network/virtualNetworks/subnets@2024-05-01' = {
   }
 }
 
+resource snetWorkloads 'Microsoft.Network/virtualNetworks/subnets@2024-05-01' = {
+  parent: vnet
+  name: 'snet-workloads'
+  dependsOn: [snetGateway]
+  properties: {
+    addressPrefix: '10.0.1.0/24'
+    serviceEndpoints: [
+      {
+        service: 'Microsoft.Storage'
+      }
+    ]
+  }
+}
+
 output vnetId string = vnet.id
 output vnetName string = vnet.name
