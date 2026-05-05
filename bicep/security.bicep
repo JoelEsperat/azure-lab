@@ -23,6 +23,12 @@ resource law 'Microsoft.OperationalInsights/workspaces@2023-09-01' existing = {
   scope: resourceGroup('rg-lab-monitoring')
 }
 
+// Tailscale subnet router — traffic from Tailnet clients is source-NATted to this subnet's IP
+resource snetGateway 'Microsoft.Network/virtualNetworks/subnets@2024-05-01' existing = {
+  name: 'vnet-lab/snet-gateway'
+  scope: resourceGroup('rg-lab-network')
+}
+
 // Built-in Key Vault RBAC role definition GUIDs
 var roleSecretsOfficer = 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7'
 var roleSecretsUser = '4633458b-17de-408a-b874-0445c86b69e6'
@@ -48,7 +54,12 @@ resource kv 'Microsoft.KeyVault/vaults@2024-11-01' = {
           value: homeIp
         }
       ]
-      virtualNetworkRules: []
+      virtualNetworkRules: [
+        {
+          id: snetGateway.id
+          ignoreMissingVnetServiceEndpoint: false
+        }
+      ]
     }
   }
 }

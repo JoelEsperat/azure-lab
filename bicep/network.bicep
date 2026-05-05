@@ -26,6 +26,11 @@ resource snetGateway 'Microsoft.Network/virtualNetworks/subnets@2024-05-01' = {
   properties: {
     addressPrefix: '10.0.0.0/24'
     privateEndpointNetworkPolicies: 'Disabled'
+    serviceEndpoints: [
+      {
+        service: 'Microsoft.KeyVault'
+      }
+    ]
   }
 }
 

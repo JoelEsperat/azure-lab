@@ -42,9 +42,13 @@ function Get-HomeIp {
     return (Invoke-RestMethod -Uri "https://api.ipify.org" -UseBasicParsing).Trim()
 }
 
-function Invoke-Az([string[]]$Args) {
-    az @Args
-    if ($LASTEXITCODE -ne 0) { throw "az $($Args[0]) failed (exit $LASTEXITCODE)" }
+function Invoke-Az([string[]]$AzArgs) {
+    $prevPythonWarnings = $env:PYTHONWARNINGS
+    $env:PYTHONWARNINGS = 'ignore::SyntaxWarning:azure.mgmt.resource.deploymentstacks'
+    az @AzArgs
+    $exitCode = $LASTEXITCODE
+    $env:PYTHONWARNINGS = $prevPythonWarnings
+    if ($exitCode -ne 0) { throw "az $($AzArgs[0]) failed (exit $exitCode)" }
 }
 
 # ── Targets ──────────────────────────────────────────────────────────────────
