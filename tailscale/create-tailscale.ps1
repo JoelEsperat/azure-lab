@@ -14,6 +14,9 @@ function Import-EnvFile([string]$Path) {
             $idx = $line.IndexOf('=')
             $key = $line.Substring(0, $idx).Trim()
             $val = $line.Substring($idx + 1).Trim()
+            if ($val.Length -ge 2 -and (($val.StartsWith('"') -and $val.EndsWith('"')) -or ($val.StartsWith("'") -and $val.EndsWith("'")))) {
+                $val = $val.Substring(1, $val.Length - 2)
+            }
             if ($key) { [System.Environment]::SetEnvironmentVariable($key, $val, "Process") }
         }
     }
@@ -30,14 +33,18 @@ $Template = Join-Path $ScriptDir "..\bicep\tailscale.bicep"
 $subscriptionId = az account show --query id -o tsv
 $kvName = "kv-lab-" + ($subscriptionId -replace '-', '').Substring(0, 6)
 
+function Invoke-Az([string[]]$AzArgs) {
+    az @AzArgs
+    if ($LASTEXITCODE -ne 0) { throw "az $($AzArgs[0]) failed (exit $LASTEXITCODE)" }
+}
+
 Write-Host "-> Deploying Tailscale VM via bicep/tailscale.bicep..."
-az deployment group create `
-    --resource-group $RG `
-    --name tailscale-deploy `
-    --template-file $Template `
-    --parameters adminSshPubkey="$env:ADMIN_SSH_PUBKEY" `
-    --output none
-if ($LASTEXITCODE -ne 0) { throw "Deployment failed" }
+Invoke-Az "deployment", "group", "create",
+    "--resource-group", $RG,
+    "--name", "tailscale-deploy",
+    "--template-file", $Template,
+    "--parameters", "adminSshPubkey=$env:ADMIN_SSH_PUBKEY",
+    "--output", "none"
 
 Write-Host "-> Granting VM managed identity access to Key Vault..."
 $vmPrincipalId = az vm identity show --name vm-tailscale --resource-group $RG --query principalId -o tsv

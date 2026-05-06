@@ -14,6 +14,9 @@ function Import-EnvFile([string]$Path) {
             $idx = $line.IndexOf('=')
             $key = $line.Substring(0, $idx).Trim()
             $val = $line.Substring($idx + 1).Trim()
+            if ($val.Length -ge 2 -and (($val.StartsWith('"') -and $val.EndsWith('"')) -or ($val.StartsWith("'") -and $val.EndsWith("'")))) {
+                $val = $val.Substring(1, $val.Length - 2)
+            }
             if ($key) { [System.Environment]::SetEnvironmentVariable($key, $val, "Process") }
         }
     }
@@ -32,7 +35,7 @@ if ($env:TS_API_KEY) {
     $headers = @{ Authorization = "Bearer $env:TS_API_KEY" }
     try {
         $resp    = Invoke-RestMethod -Uri "https://api.tailscale.com/api/v2/tailnet/-/devices" -Headers $headers -UseBasicParsing
-        $devices = $resp.devices | Where-Object { $_.hostname -eq "azure" }
+        $devices = $resp.devices | Where-Object { $_.hostname -eq "azure-gw" }
         if ($devices) {
             foreach ($device in $devices) {
                 try {

@@ -23,6 +23,9 @@ function Import-EnvFile([string]$Path) {
             $idx = $line.IndexOf('=')
             $key = $line.Substring(0, $idx).Trim()
             $val = $line.Substring($idx + 1).Trim()
+            if ($val.Length -ge 2 -and (($val.StartsWith('"') -and $val.EndsWith('"')) -or ($val.StartsWith("'") -and $val.EndsWith("'")))) {
+                $val = $val.Substring(1, $val.Length - 2)
+            }
             if ($key) { [System.Environment]::SetEnvironmentVariable($key, $val, "Process") }
         }
     }
@@ -244,7 +247,7 @@ function Invoke-WhatIfTailscale {
     Invoke-Az "deployment", "group", "what-if",
         "--resource-group", $RG_NETWORK,
         "--template-file", "bicep/tailscale.bicep",
-        "--parameters", "adminSshPubkey=$env:ADMIN_SSH_PUBKEY", "tsAuthKey=dummy-for-whatif"
+        "--parameters", "adminSshPubkey=$env:ADMIN_SSH_PUBKEY"
 }
 
 function Invoke-DestroyTailscale {
