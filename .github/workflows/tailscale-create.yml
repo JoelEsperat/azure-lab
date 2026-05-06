@@ -22,6 +22,5 @@ jobs:
       - name: Deploy Tailscale VM
         env:
           ADMIN_SSH_PUBKEY: ${{ secrets.ADMIN_SSH_PUBKEY }}
-          TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
           TS_API_KEY: ${{ secrets.TS_API_KEY }}
         run: bash tailscale/create-tailscale.sh

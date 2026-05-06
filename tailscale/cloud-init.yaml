@@ -5,16 +5,43 @@ package_upgrade: true
 packages:
   - curl
   - iptables
+  - jq
+
+write_files:
+  - path: /usr/local/bin/tailscale-init.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+      TS_AUTHKEY=''
+      for i in $(seq 1 20); do
+        TOKEN=$(curl -sf -H 'Metadata:true' \
+          'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https%3A%2F%2Fvault.azure.net' \
+          | jq -r '.access_token' 2>/dev/null || true)
+        if [ -n "$TOKEN" ] && [ "$TOKEN" != 'null' ]; then
+          TS_AUTHKEY=$(curl -sf \
+            -H "Authorization: Bearer $TOKEN" \
+            'https://${KV_NAME}.vault.azure.net/secrets/ts-authkey?api-version=7.4' \
+            | jq -r '.value' 2>/dev/null || true)
+          [ -n "$TS_AUTHKEY" ] && [ "$TS_AUTHKEY" != 'null' ] && break
+        fi
+        sleep 15
+      done
+      if [ -z "$TS_AUTHKEY" ]; then
+        echo 'Failed to retrieve ts-authkey from Key Vault after 20 attempts' >&2
+        exit 1
+      fi
+      tailscale up \
+        --authkey="$TS_AUTHKEY" \
+        --advertise-routes=10.0.0.0/16 \
+        --accept-dns=false \
+        --accept-routes=true \
+        --hostname=azure-gw \
+        --ssh
 
 runcmd:
   - curl -fsSL https://tailscale.com/install.sh | sh
   - echo 'net.ipv4.ip_forward=1' >> /etc/sysctl.conf
   - echo 'net.ipv6.conf.all.forwarding=1' >> /etc/sysctl.conf
   - sysctl -p
-  - tailscale up
-      --authkey=${TS_AUTHKEY}
-      --advertise-routes=10.0.0.0/16
-      --accept-dns=false
-      --accept-routes=true
-      --hostname=azure
-      --ssh
+  - /usr/local/bin/tailscale-init.sh

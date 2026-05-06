@@ -208,7 +208,7 @@ whatif-tailscale: ## Preview tailscale.bicep changes
 	@az deployment group what-if \
 		--resource-group $(RG_NETWORK) \
 		--template-file bicep/tailscale.bicep \
-		--parameters adminSshPubkey="$$ADMIN_SSH_PUBKEY" tsAuthKey="dummy-for-whatif"
+		--parameters adminSshPubkey="$$ADMIN_SSH_PUBKEY"
 
 .PHONY: destroy-tailscale
 destroy-tailscale: ## Destroy the Tailscale subnet router VM (and clean up tailnet device)

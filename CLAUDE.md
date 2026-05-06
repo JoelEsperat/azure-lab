@@ -40,7 +40,6 @@ Copy `.env.sample` → `.env` and populate. The `.env` file is sourced by both t
 | `ADMIN_OBJECT_ID` | `deploy-security` |
 | `AUTOMATION_OBJECT_ID` | `deploy-security` |
 | `ADMIN_SSH_PUBKEY` | `deploy-tailscale` |
-| `TS_AUTHKEY` | `deploy-tailscale` |
 | `TS_API_KEY` | `deploy-tailscale`, `destroy-tailscale` |
 | `HOME_IP` | `deploy-security`, `deploy-storage` (auto-detected via `api.ipify.org` if unset) |
 
@@ -69,8 +68,9 @@ The workflows call the same bash scripts and authenticate via Azure OIDC (no sto
 | `AZURE_TENANT_ID` | Entra tenant ID |
 | `AZURE_SUBSCRIPTION_ID` | Azure subscription ID |
 | `ADMIN_SSH_PUBKEY` | SSH public key for VM admin |
-| `TS_AUTHKEY` | Tailscale auth key |
 | `TS_API_KEY` | Tailscale API key |
+
+`TS_AUTHKEY` is no longer a required secret — store it manually in Key Vault before triggering the workflow (see Tailscale auth key section below).
 
 ## Deployment order
 
@@ -100,9 +100,17 @@ The Tailscale subnet router (`tailscale.bicep`) is deployed on-demand outside th
 
 Any new VM SKU must be added to `allowedVmSkus` in `policy.bicep` before deploying resources that use it.
 
-**Tailscale subnet router** — `tailscale.bicep` loads `tailscale/cloud-init.yaml` at Bicep compile time via `loadTextContent()`, substituting `${TS_AUTHKEY}` before base64-encoding it as `customData`. The Tailscale hostname `azure` is hardcoded in both `cloud-init.yaml` (via `--hostname=azure`) and the create/destroy scripts (used to identify the tailnet device via Tailscale API). The Azure VM OS hostname (`computerName`) matches.
+**Tailscale subnet router** — `tailscale.bicep` loads `tailscale/cloud-init.yaml` at Bicep compile time via `loadTextContent()`, substituting the Key Vault name (`${KV_NAME}`) before base64-encoding it as `customData`. The VM is given a system-assigned managed identity. The create script grants the identity **Key Vault Secrets User** on the KV after deployment. At boot, `cloud-init.yaml` fetches the `ts-authkey` secret from Key Vault via the IMDS token endpoint and passes it to `tailscale up` — the auth key never appears in VM metadata or ARM deployment history.
 
-The create script deploys Bicep then polls the Tailscale API until the device appears, then approves the `10.0.0.0/16` route. The destroy script removes the tailnet device before deleting Azure resources.
+The Tailscale hostname `azure` is hardcoded in both `cloud-init.yaml` (via `--hostname=azure`) and the create/destroy scripts (used to identify the tailnet device via Tailscale API). The Azure VM OS hostname (`computerName`) matches.
+
+The create script deploys Bicep, creates the KV role assignment, then polls the Tailscale API until the device appears, then approves the `10.0.0.0/16` route. The destroy script removes the tailnet device before deleting Azure resources.
+
+**Tailscale auth key** — store the key in Key Vault before deploying the VM (the VM fetches it at boot; redeploys need a fresh key stored before triggering):
+```bash
+KV_NAME="kv-lab-$(az account show --query id -o tsv | tr -d '-' | cut -c1-6)"
+az keyvault secret set --vault-name "$KV_NAME" --name ts-authkey --value "<authkey>"
+```
 
 **Key Vault naming** — `security.bicep` derives the vault name deterministically: `kv-lab-` + first 6 chars of subscription ID (hyphens stripped). This avoids naming conflicts while keeping it reproducible.
 

@@ -11,16 +11,30 @@ ENV_FILE="${SCRIPT_DIR}/../.env"
 RG="rg-lab-network"
 TEMPLATE="${SCRIPT_DIR}/../bicep/tailscale.bicep"
 ADMIN_SSH_PUBKEY="${ADMIN_SSH_PUBKEY:?ADMIN_SSH_PUBKEY env var required}"
-TS_AUTHKEY="${TS_AUTHKEY:?TS_AUTHKEY env var required}"
 TS_API_KEY="${TS_API_KEY:?TS_API_KEY env var required}"
+
+SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+KV_NAME="kv-lab-$(echo "${SUBSCRIPTION_ID//-/}" | cut -c1-6)"
 
 echo "→ Deploying Tailscale VM via bicep/tailscale.bicep..."
 az deployment group create \
   --resource-group "$RG" \
   --name tailscale-deploy \
   --template-file "$TEMPLATE" \
-  --parameters adminSshPubkey="$ADMIN_SSH_PUBKEY" tsAuthKey="$TS_AUTHKEY" \
+  --parameters adminSshPubkey="$ADMIN_SSH_PUBKEY" \
   --output none
+
+echo "→ Granting VM managed identity access to Key Vault..."
+VM_PRINCIPAL_ID=$(az vm identity show --name vm-tailscale --resource-group "$RG" --query principalId -o tsv)
+KV_ID=$(az keyvault show --name "$KV_NAME" --resource-group rg-lab-security --query id -o tsv)
+ROLE_SECRETS_USER="4633458b-17de-408a-b874-0445c86b69e6"
+az role assignment create \
+  --role "$ROLE_SECRETS_USER" \
+  --assignee-object-id "$VM_PRINCIPAL_ID" \
+  --assignee-principal-type ServicePrincipal \
+  --scope "$KV_ID" \
+  --output none 2>/dev/null || echo "  ⚠ Role assignment already exists or could not be created — verify manually if first deployment"
+echo "  ✓ Key Vault Secrets User granted to VM identity"
 
 PUBLIC_IP=$(az network public-ip show --resource-group "$RG" --name pip-tailscale --query ipAddress -o tsv)
 echo "  ✓ VM deployed (Public IP: $PUBLIC_IP)"
@@ -32,7 +46,7 @@ for i in $(seq 1 20); do
   DEVICE_ID=$(curl -sf \
     -H "Authorization: Bearer ${TS_API_KEY}" \
     "https://api.tailscale.com/api/v2/tailnet/-/devices" \
-    | jq -r '([.devices[] | select(.hostname == "azure")] | sort_by(.lastSeen) | last | .id) // empty' 2>/dev/null || true)
+    | jq -r '([.devices[] | select(.hostname == "azure-gw")] | sort_by(.lastSeen) | last | .id) // empty' 2>/dev/null || true)
   if [[ -n "$DEVICE_ID" ]]; then
     echo "  ✓ Device found: $DEVICE_ID"
     break

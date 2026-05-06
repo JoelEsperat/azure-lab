@@ -22,20 +22,34 @@ function Import-EnvFile([string]$Path) {
 Import-EnvFile $EnvFile
 
 if (-not $env:ADMIN_SSH_PUBKEY) { throw "ADMIN_SSH_PUBKEY env var required" }
-if (-not $env:TS_AUTHKEY)       { throw "TS_AUTHKEY env var required" }
 if (-not $env:TS_API_KEY)       { throw "TS_API_KEY env var required" }
 
 $RG       = "rg-lab-network"
 $Template = Join-Path $ScriptDir "..\bicep\tailscale.bicep"
+
+$subscriptionId = az account show --query id -o tsv
+$kvName = "kv-lab-" + ($subscriptionId -replace '-', '').Substring(0, 6)
 
 Write-Host "-> Deploying Tailscale VM via bicep/tailscale.bicep..."
 az deployment group create `
     --resource-group $RG `
     --name tailscale-deploy `
     --template-file $Template `
-    --parameters adminSshPubkey="$env:ADMIN_SSH_PUBKEY" tsAuthKey="$env:TS_AUTHKEY" `
+    --parameters adminSshPubkey="$env:ADMIN_SSH_PUBKEY" `
     --output none
 if ($LASTEXITCODE -ne 0) { throw "Deployment failed" }
+
+Write-Host "-> Granting VM managed identity access to Key Vault..."
+$vmPrincipalId = az vm identity show --name vm-tailscale --resource-group $RG --query principalId -o tsv
+$kvId = az keyvault show --name $kvName --resource-group rg-lab-security --query id -o tsv
+$roleSecretsUser = "4633458b-17de-408a-b874-0445c86b69e6"
+az role assignment create `
+    --role $roleSecretsUser `
+    --assignee-object-id $vmPrincipalId `
+    --assignee-principal-type ServicePrincipal `
+    --scope $kvId `
+    --output none 2>$null
+Write-Host "  Key Vault Secrets User granted to VM identity"
 
 $PUBLIC_IP = az network public-ip show --resource-group $RG --name pip-tailscale --query ipAddress -o tsv
 Write-Host "  VM deployed (Public IP: $PUBLIC_IP)"
@@ -49,7 +63,7 @@ $DEVICE_ID = ""
 for ($i = 1; $i -le 20; $i++) {
     try {
         $resp   = Invoke-RestMethod -Uri "https://api.tailscale.com/api/v2/tailnet/-/devices" -Headers $headers -UseBasicParsing
-        $device = $resp.devices | Where-Object { $_.hostname -eq "azure" } | Sort-Object lastSeen | Select-Object -Last 1
+        $device = $resp.devices | Where-Object { $_.hostname -eq "azure-gw" } | Sort-Object lastSeen | Select-Object -Last 1
         if ($device) {
             $DEVICE_ID = $device.id
             Write-Host "  Device found: $DEVICE_ID"

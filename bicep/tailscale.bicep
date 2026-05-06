@@ -25,11 +25,8 @@ param adminUsername string = 'azureuser'
 @secure()
 param adminSshPubkey string
 
-@description('Tailscale auth key (one-time, expires).')
-@secure()
-param tsAuthKey string
-
-var cloudInit = base64(replace(loadTextContent('../tailscale/cloud-init.yaml'), '\${TS_AUTHKEY}', tsAuthKey))
+var kvName    = 'kv-lab-${substring(replace(subscription().subscriptionId, '-', ''), 0, 6)}'
+var cloudInit = base64(replace(loadTextContent('../tailscale/cloud-init.yaml'), '\${KV_NAME}', kvName))
 var lawName   = 'law-lab-${substring(replace(subscription().subscriptionId, '-', ''), 0, 6)}'
 
 resource law 'Microsoft.OperationalInsights/workspaces@2023-09-01' existing = {
@@ -106,6 +103,9 @@ resource vm 'Microsoft.Compute/virtualMachines@2024-07-01' = {
   name: 'vm-tailscale'
   location: location
   tags: tags
+  identity: {
+    type: 'SystemAssigned'
+  }
   properties: {
     hardwareProfile: {
       vmSize: vmSize
